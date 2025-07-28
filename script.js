@@ -27,8 +27,7 @@ fetch('data/final_kec_202413309.geojson')
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
         const label = feature.properties.nmkec;
-        // Label hanya permanen di level 'kecamatan'
-        layer.bindTooltip(label, { permanent: (currentLevel === 'kecamatan'), direction: 'center', className: 'label' });
+        layer.bindTooltip(label, { permanent: true, direction: 'center', className: 'label' });
 
         layer.on('click', () => {
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
@@ -44,14 +43,6 @@ fetch('data/final_kec_202413309.geojson')
           loadDesa(feature.properties.kdkec);
           currentLevel = 'desa';
           backBtn.hidden = false;
-
-          // Perbarui semua tooltip kecamatan agar tidak permanen saat beralih level
-          kecLayer.eachLayer(l => {
-            if (l.getTooltip()) {
-              l.unbindTooltip(); // Lepas tooltip lama
-              l.bindTooltip(l.feature.properties.nmkec, { permanent: false, direction: 'center', className: 'label' }); // Bind ulang tanpa permanen
-            }
-          });
         });
       }
     }).addTo(map);
@@ -70,8 +61,7 @@ function loadDesa(kdkec) {
       desaLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          // Label hanya permanen di level 'desa'
-          layer.bindTooltip(feature.properties.nmdesa, { permanent: (currentLevel === 'desa'), direction: 'center', className: 'label' });
+          layer.bindTooltip(feature.properties.nmdesa, { permanent: true, direction: 'center', className: 'label' });
 
           layer.on('click', (e) => {
             if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
@@ -86,14 +76,6 @@ function loadDesa(kdkec) {
             loadSLS(feature.properties.kddesa);
             currentLevel = 'sls';
             e.originalEvent.stopPropagation();
-
-            // Perbarui semua tooltip desa agar tidak permanen saat beralih level
-            desaLayer.eachLayer(l => {
-              if (l.getTooltip()) {
-                l.unbindTooltip();
-                l.bindTooltip(l.feature.properties.nmdesa, { permanent: false, direction: 'center', className: 'label' });
-              }
-            });
           });
         }
       }).addTo(map);
@@ -113,8 +95,7 @@ function loadSLS(kddesa) {
       slsLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          // Label hanya permanen di level 'sls'
-          layer.bindTooltip(feature.properties.nmsls, { permanent: (currentLevel === 'sls'), direction: 'center', className: 'label' });
+          layer.bindTooltip(feature.properties.nmsls, { permanent: true, direction: 'center', className: 'label' });
 
           layer.on('click', (e) => {
             if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
@@ -123,7 +104,6 @@ function loadSLS(kddesa) {
 
             map.fitBounds(layer.getBounds());
             e.originalEvent.stopPropagation();
-            // Di level SLS, tidak ada transisi ke level selanjutnya, jadi tidak perlu memperbarui tooltip di sini.
           });
         }
       }).addTo(map);
@@ -148,33 +128,12 @@ function goBack() {
     clearLayers(['sls']);
     selectedSLSLayer = null;
     currentLevel = 'desa';
-
-    // Saat kembali ke desa, pastikan label desa aktif kembali
-    if (desaLayer) {
-      desaLayer.eachLayer(l => {
-        if (l.getTooltip()) {
-          l.unbindTooltip();
-          l.bindTooltip(l.feature.properties.nmdesa, { permanent: true, direction: 'center', className: 'label' });
-        }
-      });
-    }
-
   } else if (currentLevel === 'desa') {
     clearLayers(['desa', 'sls']);
     selectedDesaLayer = null;
-    if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle); // Reset style kecamatan yang sebelumnya dipilih
-    selectedKecLayer = null; // Hapus referensi ke kecamatan yang dipilih
+    selectedKecLayer.setStyle(defaultStyle);
+    selectedKecLayer = null;
     currentLevel = 'kecamatan';
     backBtn.hidden = true;
-
-    // Saat kembali ke kecamatan, pastikan label kecamatan aktif kembali
-    if (kecLayer) {
-      kecLayer.eachLayer(l => {
-        if (l.getTooltip()) {
-          l.unbindTooltip();
-          l.bindTooltip(l.feature.properties.nmkec, { permanent: true, direction: 'center', className: 'label' });
-        }
-      });
-    }
   }
 }
