@@ -1,172 +1,182 @@
 // script.js
 
-const map = L.map('map').setView([-7.5, 110.6], 10);
+let map = L.map('map').setView([-7.5, 110.6], 10);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+  maxZoom: 18,
+  attribution: '© OpenStreetMap'
 }).addTo(map);
 
-const layerGroups = {
-  kecamatan: L.geoJSON(null, {
-    style: { color: '#333', weight: 1, fillColor: '#8ecae6', fillOpacity: 0.6 },
-    onEachFeature: onEachKecamatan
-  }),
-  desa: L.geoJSON(null, {
-    style: { color: '#333', weight: 1, fillColor: '#219ebc', fillOpacity: 0.6 },
-    onEachFeature: onEachDesa
-  }),
-  sls: L.geoJSON(null, {
-    style: { color: '#333', weight: 1, fillColor: '#023047', fillOpacity: 0.6 },
-    onEachFeature: onEachSLS
-  })
+let currentLevel = 'kecamatan';
+let selectedKecamatan = null;
+let selectedDesa = null;
+let selectedSLS = null;
+
+let layers = {
+  kecamatan: null,
+  desa: null,
+  sls: null
 };
 
-let currentLevel = 'kecamatan';
-let selectedKec = null;
-let selectedDesa = null;
-const legendList = document.getElementById('legend-list');
+let geojsonData = {
+  kecamatan: null,
+  desa: null,
+  sls: null
+};
 
-function resetMap() {
-  Object.values(layerGroups).forEach(layer => layer.clearLayers());
-  legendList.innerHTML = '';
+fetch('data/final_kec_202413309.geojson')
+  .then(res => res.json())
+  .then(data => {
+    geojsonData.kecamatan = data;
+    showKecamatan();
+  });
+
+fetch('data/final_desa_202413309.geojson')
+  .then(res => res.json())
+  .then(data => geojsonData.desa = data);
+
+fetch('data/final_sls_202413309.geojson')
+  .then(res => res.json())
+  .then(data => geojsonData.sls = data);
+
+function showKecamatan() {
+  clearMap();
+  currentLevel = 'kecamatan';
+  updateLegend(geojsonData.kecamatan.features, 'kdkec', 'nmkec');
+
+  layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
+    style: { color: '#333', weight: 1, fillOpacity: 0.2 },
+    onEachFeature: (feature, layer) => {
+      layer.on({
+        click: () => {
+          selectedKecamatan = feature.properties.kdkec;
+          showDesa();
+        },
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer)
+      });
+    }
+  }).addTo(map);
+
+  map.fitBounds(layers.kecamatan.getBounds());
 }
 
-function setLegend(items, clickHandler) {
-  legendList.innerHTML = '';
-  items.sort((a, b) => a.code.localeCompare(b.code)).forEach(item => {
+function showDesa() {
+  clearMap();
+  currentLevel = 'desa';
+
+  let filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
+  updateLegend(filtered, 'kddesa', 'nmdesa');
+
+  layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
+    style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
+    onEachFeature: (feature, layer) => {
+      layer.on({
+        click: () => {
+          selectedDesa = feature.properties.kddesa;
+          showSLS();
+        },
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer)
+      });
+    }
+  }).addTo(map);
+
+  map.fitBounds(layers.desa.getBounds());
+}
+
+function showSLS() {
+  clearMap();
+  currentLevel = 'sls';
+
+  let filtered = geojsonData.sls.features.filter(f =>
+    f.properties.kdkec === selectedKecamatan && f.properties.kddesa === selectedDesa
+  );
+  updateLegend(filtered, 'kdsls', 'nmsls');
+
+  layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
+    style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
+    onEachFeature: (feature, layer) => {
+      layer.on({
+        click: () => {
+          selectedSLS = feature.properties.kdsls;
+          map.fitBounds(layer.getBounds());
+        },
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer)
+      });
+    }
+  }).addTo(map);
+
+  map.fitBounds(layers.sls.getBounds());
+}
+
+function clearMap() {
+  Object.values(layers).forEach(l => l && map.removeLayer(l));
+}
+
+function updateLegend(features, codeProp, nameProp) {
+  const list = document.getElementById('legend-list');
+  list.innerHTML = '';
+  const sorted = [...features].sort((a, b) => a.properties[codeProp].localeCompare(b.properties[codeProp]));
+
+  sorted.forEach(f => {
     const li = document.createElement('li');
-    li.textContent = `${item.code} ${item.name}`;
-    li.dataset.code = item.code;
-    li.classList.add('legend-item');
-    li.addEventListener('click', () => clickHandler(item.code));
-    li.addEventListener('mouseover', () => highlightPolygon(item.code));
-    li.addEventListener('mouseout', () => resetHighlight());
-    legendList.appendChild(li);
+    li.className = 'legend-item';
+    li.innerText = `(${f.properties[codeProp]}) ${f.properties[nameProp]}`;
+
+    li.addEventListener('mouseover', () => {
+      const layer = findLayerByFeature(f);
+      if (layer) highlightFeature(layer);
+    });
+
+    li.addEventListener('mouseout', () => {
+      const layer = findLayerByFeature(f);
+      if (layer) resetHighlight(layer);
+    });
+
+    li.addEventListener('click', () => {
+      if (currentLevel === 'kecamatan') {
+        selectedKecamatan = f.properties.kdkec;
+        showDesa();
+      } else if (currentLevel === 'desa') {
+        selectedDesa = f.properties.kddesa;
+        showSLS();
+      } else if (currentLevel === 'sls') {
+        selectedSLS = f.properties.kdsls;
+        const layer = findLayerByFeature(f);
+        if (layer) map.fitBounds(layer.getBounds());
+      }
+    });
+
+    list.appendChild(li);
   });
 }
 
-function highlightPolygon(code) {
-  map.eachLayer(layer => {
-    if (layer.feature && layer.feature.properties) {
-      const props = layer.feature.properties;
-      const layerCode = props.kdkec || props.kddesa || props.kdsls;
-      if (layerCode === code) {
-        layer.setStyle({ fillOpacity: 1, weight: 3 });
-      }
+function findLayerByFeature(feature) {
+  let layerGroup = layers[currentLevel];
+  let found = null;
+  layerGroup.eachLayer(layer => {
+    if (JSON.stringify(layer.feature.properties) === JSON.stringify(feature.properties)) {
+      found = layer;
     }
   });
+  return found;
 }
 
-function resetHighlight() {
-  Object.entries(layerGroups).forEach(([key, layerGroup]) => {
-    layerGroup.eachLayer(layer => {
-      layer.setStyle({ fillOpacity: 0.6, weight: 1 });
-    });
-  });
+function highlightFeature(layer) {
+  layer.setStyle({ weight: 3, color: '#2196f3', fillOpacity: 0.6 });
+  layer.bringToFront();
 }
 
-function onEachKecamatan(feature, layer) {
-  const { kdkec, nmkec } = feature.properties;
-  layer.bindTooltip(nmkec);
-  layer.on({
-    click: () => loadDesa(kdkec),
-    mouseover: () => highlightPolygon(kdkec),
-    mouseout: () => resetHighlight()
-  });
-}
-
-function onEachDesa(feature, layer) {
-  const { kddesa, nmdesa } = feature.properties;
-  layer.bindTooltip(nmdesa);
-  layer.on({
-    click: () => loadSLS(kddesa),
-    mouseover: () => highlightPolygon(kddesa),
-    mouseout: () => resetHighlight()
-  });
-}
-
-function onEachSLS(feature, layer) {
-  const { kdsls, nmsls } = feature.properties;
-  layer.bindTooltip(nmsls);
-  layer.on({
-    click: () => zoomToLayer(layer),
-    mouseover: () => highlightPolygon(kdsls),
-    mouseout: () => resetHighlight()
-  });
-}
-
-function zoomToLayer(layer) {
-  map.fitBounds(layer.getBounds());
-}
-
-function loadKecamatan() {
-  resetMap();
-  currentLevel = 'kecamatan';
-  selectedKec = null;
-  selectedDesa = null;
-  fetch('data/final_kec_202413309.geojson')
-    .then(res => res.json())
-    .then(data => {
-      layerGroups.kecamatan.addData(data).addTo(map);
-      map.fitBounds(layerGroups.kecamatan.getBounds());
-      const items = data.features.map(f => ({
-        code: f.properties.kdkec,
-        name: f.properties.nmkec
-      }));
-      setLegend(items, loadDesa);
-    });
-}
-
-function loadDesa(kdkec) {
-  resetMap();
-  currentLevel = 'desa';
-  selectedKec = kdkec;
-  fetch('data/final_desa_202413309.geojson')
-    .then(res => res.json())
-    .then(data => {
-      const filtered = {
-        type: 'FeatureCollection',
-        features: data.features.filter(f => f.properties.kdkec === kdkec)
-      };
-      layerGroups.desa.addData(filtered).addTo(map);
-      map.fitBounds(layerGroups.desa.getBounds());
-      const items = filtered.features.map(f => ({
-        code: f.properties.kddesa,
-        name: f.properties.nmdesa
-      }));
-      setLegend(items, loadSLS);
-    });
-}
-
-function loadSLS(kddesa) {
-  resetMap();
-  currentLevel = 'sls';
-  selectedDesa = kddesa;
-  fetch('data/final_sls_202413309.geojson')
-    .then(res => res.json())
-    .then(data => {
-      const filtered = {
-        type: 'FeatureCollection',
-        features: data.features.filter(f => f.properties.kddesa === kddesa)
-      };
-      layerGroups.sls.addData(filtered).addTo(map);
-      map.fitBounds(layerGroups.sls.getBounds());
-      const items = filtered.features.map(f => ({
-        code: f.properties.kdsls,
-        name: f.properties.nmsls
-      }));
-      setLegend(items, code => {
-        const layer = layerGroups.sls.getLayers().find(l => l.feature.properties.kdsls === code);
-        if (layer) zoomToLayer(layer);
-      });
-    });
+function resetHighlight(layer) {
+  layer.setStyle({ weight: 1, color: '#333', fillOpacity: 0.3 });
 }
 
 document.getElementById('back-btn').addEventListener('click', () => {
   if (currentLevel === 'sls') {
-    loadDesa(selectedKec);
+    showDesa();
   } else if (currentLevel === 'desa') {
-    loadKecamatan();
+    showKecamatan();
   }
 });
-
-loadKecamatan();
