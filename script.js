@@ -1,187 +1,186 @@
-// Inisialisasi peta
-const map = L.map('map').setView([-7.5, 110.6], 10); // sesuaikan koordinat awal
+// ======================
+// Hierarchical Interactive Map
+// ======================
+
+let map = L.map('map').setView([-7.5, 110.7], 10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+    maxZoom: 18,
 }).addTo(map);
 
-// Global state
-let currentLevel = 'kecamatan'; // level awal
-let selectedKecamatan = null;
-let selectedDesa = null;
+let currentLevel = 'kecamatan';
+let currentKec = null;
+let currentDesa = null;
 
-let kecamatanLayer, desaLayer, slsLayer;
-let legendList = document.getElementById("legendList");
-let legendTitle = document.getElementById("legendTitle");
-
-// Tombol kembali
-document.getElementById("backBtn").onclick = () => {
-  if (currentLevel === 'desa') {
-    loadKecamatan();
-  } else if (currentLevel === 'sls') {
-    loadDesa(selectedKecamatan);
-  }
+let geojsonLayers = {
+    kecamatan: null,
+    desa: null,
+    sls: null
 };
 
-// Fungsi hover label
-function onEachFeature(feature, layer, level) {
-  layer.on({
-    mouseover: function (e) {
-      const layer = e.target;
-      layer.setStyle({ weight: 3, color: '#2a7be4', fillOpacity: 0.6 });
-      const nama = feature.properties[`nm${level}`];
-      layer.bindTooltip(nama, { permanent: false, direction: 'top' }).openTooltip();
-      highlightLegendItem(feature.properties[`kd${level}`]);
-    },
-    mouseout: function (e) {
-      geojson.resetStyle(e.target);
-      layer.closeTooltip();
-      clearHighlightLegend();
-    }
-  });
-}
+let dataGeojson = {
+    kecamatan: null,
+    desa: null,
+    sls: null
+};
 
-// Fungsi membuat legenda interaktif
-function updateLegend(features, level) {
-  legendList.innerHTML = "";
-  legendTitle.textContent = `Daftar ${level[0].toUpperCase() + level.slice(1)}`;
-  const sorted = [...features].sort((a, b) =>
-    a.properties[`kd${level}`].localeCompare(b.properties[`kd${level}`])
-  );
-  sorted.forEach(f => {
-    const li = document.createElement("li");
-    const kode = f.properties[`kd${level}`];
-    const nama = f.properties[`nm${level}`];
-    li.textContent = `${kode} ${nama}`;
-    li.dataset.kode = kode;
-    li.onclick = () => {
-      if (level === "kecamatan") {
-        selectedKecamatan = kode;
-        loadDesa(kode);
-      } else if (level === "desa") {
-        selectedDesa = kode;
-        loadSLS(kode);
-      }
-    };
-    li.onmouseover = () => highlightPolygonByCode(kode, level);
-    li.onmouseout = () => clearHighlightMap();
-    legendList.appendChild(li);
-  });
-}
+let legendDiv = document.getElementById('legend');
+let backButton = document.getElementById('backButton');
 
-// Fungsi untuk highlight dari legenda ke peta
-function highlightPolygonByCode(code, level) {
-  const layerGroup = level === 'kecamatan' ? kecamatanLayer :
-                     level === 'desa' ? desaLayer : slsLayer;
-  layerGroup.eachLayer(layer => {
-    if (layer.feature.properties[`kd${level}`] === code) {
-      layer.setStyle({ weight: 3, color: '#2a7be4', fillOpacity: 0.6 });
-    }
-  });
-}
-
-function clearHighlightMap() {
-  if (kecamatanLayer) kecamatanLayer.resetStyle();
-  if (desaLayer) desaLayer.resetStyle();
-  if (slsLayer) slsLayer.resetStyle();
-}
-
-function highlightLegendItem(code) {
-  [...legendList.children].forEach(li => {
-    li.style.backgroundColor = li.dataset.kode === code ? '#e6f0ff' : '';
-  });
-}
-
-function clearHighlightLegend() {
-  [...legendList.children].forEach(li => li.style.backgroundColor = '');
-}
-
-// Load GeoJSON
-function loadGeoJSON(url, style, level, callback) {
-  fetch(url)
+fetch('geojson/kecamatan.geojson')
     .then(res => res.json())
     .then(data => {
-      if (level === 'kecamatan') {
-        if (kecamatanLayer) map.removeLayer(kecamatanLayer);
-        kecamatanLayer = L.geoJSON(data, {
-          style,
-          onEachFeature: (f, l) => {
-            l.on('click', () => {
-              selectedKecamatan = f.properties.kdkec;
-              loadDesa(f.properties.kdkec);
-            });
-            onEachFeature(f, l, "kec");
-          }
-        }).addTo(map);
-        map.fitBounds(kecamatanLayer.getBounds());
-        currentLevel = "kecamatan";
-        updateLegend(data.features, "kecamatan");
-      }
+        dataGeojson.kecamatan = data;
+        loadKecamatan();
+    });
 
-      if (level === 'desa') {
-        if (desaLayer) map.removeLayer(desaLayer);
-        const filtered = {
-          type: "FeatureCollection",
-          features: data.features.filter(f => f.properties.kdkec === selectedKecamatan)
-        };
-        desaLayer = L.geoJSON(filtered, {
-          style,
-          onEachFeature: (f, l) => {
-            l.on('click', () => {
-              selectedDesa = f.properties.kddesa;
-              loadSLS(f.properties.kddesa);
-            });
-            onEachFeature(f, l, "desa");
-          }
-        }).addTo(map);
-        map.fitBounds(desaLayer.getBounds());
-        currentLevel = "desa";
-        updateLegend(filtered.features, "desa");
-      }
+fetch('geojson/desa.geojson')
+    .then(res => res.json())
+    .then(data => dataGeojson.desa = data);
 
-      if (level === 'sls') {
-        if (slsLayer) map.removeLayer(slsLayer);
-        const filtered = {
-          type: "FeatureCollection",
-          features: data.features.filter(f => f.properties.kddesa === selectedDesa)
-        };
-        slsLayer = L.geoJSON(filtered, {
-          style,
-          onEachFeature: (f, l) => {
-            onEachFeature(f, l, "sls");
-          }
-        }).addTo(map);
-        map.fitBounds(slsLayer.getBounds());
-        currentLevel = "sls";
-        updateLegend(filtered.features, "sls");
-      }
+fetch('geojson/sls.geojson')
+    .then(res => res.json())
+    .then(data => dataGeojson.sls = data);
 
-      if (callback) callback();
+function resetLayers(level) {
+    for (let key in geojsonLayers) {
+        if (geojsonLayers[key]) {
+            map.removeLayer(geojsonLayers[key]);
+            geojsonLayers[key] = null;
+        }
+    }
+    legendDiv.innerHTML = '';
+    backButton.style.display = (level === 'kecamatan') ? 'none' : 'block';
+}
+
+function styleBase() {
+    return {
+        color: '#333',
+        weight: 1,
+        fillOpacity: 0.5,
+        fillColor: '#cccccc'
+    };
+}
+
+function highlightFeature(e) {
+    const layer = e.target;
+    layer.setStyle({
+        fillOpacity: 0.8,
+        fillColor: '#87CEFA'
+    });
+
+    if (!layer._popup) {
+        const props = layer.feature.properties;
+        const name = props.nmkec || props.nmdesa || props.nmsls;
+        layer.bindTooltip(name, { sticky: true }).openTooltip();
+    }
+}
+
+function resetHighlight(e) {
+    geojsonLayers[currentLevel].resetStyle(e.target);
+    e.target.closeTooltip();
+}
+
+function zoomToFeature(e, nextLevel) {
+    const layer = e.target;
+    const bounds = layer.getBounds();
+    map.fitBounds(bounds);
+
+    if (nextLevel === 'desa') {
+        currentLevel = 'desa';
+        currentKec = layer.feature.properties.kdkec;
+        loadDesa(currentKec);
+    } else if (nextLevel === 'sls') {
+        currentLevel = 'sls';
+        currentDesa = layer.feature.properties.kddesa;
+        loadSLS(currentKec, currentDesa);
+    }
+}
+
+function addLegend(features, labelProp, kodeProp, onClick) {
+    const sorted = features.sort((a, b) => a.properties[kodeProp].localeCompare(b.properties[kodeProp]));
+    sorted.forEach(f => {
+        const kode = f.properties[kodeProp];
+        const nama = f.properties[labelProp];
+        const div = document.createElement('div');
+        div.className = 'legend-item';
+        div.textContent = `${kode} ${nama}`;
+        div.addEventListener('click', () => onClick(f));
+        div.addEventListener('mouseenter', () => highlightFeature({ target: geojsonLayers[currentLevel]._layers[f.id] }));
+        div.addEventListener('mouseleave', () => resetHighlight({ target: geojsonLayers[currentLevel]._layers[f.id] }));
+        legendDiv.appendChild(div);
     });
 }
 
-// Style masing-masing level
-const kecStyle = { color: "#444", weight: 1.5, fillColor: "#E0F7FA", fillOpacity: 0.5 };
-const desaStyle = { color: "#666", weight: 1.5, fillColor: "#B2EBF2", fillOpacity: 0.5 };
-const slsStyle =  { color: "#888", weight: 1.5, fillColor: "#80DEEA", fillOpacity: 0.5 };
-
-// Fungsi load per level
 function loadKecamatan() {
-  selectedKecamatan = null;
-  selectedDesa = null;
-  if (desaLayer) map.removeLayer(desaLayer);
-  if (slsLayer) map.removeLayer(slsLayer);
-  loadGeoJSON("data/final_kec_202413309.geojson", kecStyle, "kecamatan");
+    resetLayers('kecamatan');
+    geojsonLayers.kecamatan = L.geoJSON(dataGeojson.kecamatan, {
+        style: styleBase,
+        onEachFeature: (feature, layer) => {
+            layer.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight,
+                click: (e) => zoomToFeature(e, 'desa')
+            });
+        }
+    }).addTo(map);
+
+    addLegend(dataGeojson.kecamatan.features, 'nmkec', 'kdkec', feature => {
+        const layer = geojsonLayers.kecamatan.getLayers().find(l => l.feature === feature);
+        if (layer) layer.fire('click');
+    });
 }
 
 function loadDesa(kdkec) {
-  if (slsLayer) map.removeLayer(slsLayer);
-  loadGeoJSON("data/final_desa_202413309.geojson", desaStyle, "desa");
+    resetLayers('desa');
+    const filtered = dataGeojson.desa.features.filter(f => f.properties.kdkec === kdkec);
+    geojsonLayers.desa = L.geoJSON(filtered, {
+        style: styleBase,
+        onEachFeature: (feature, layer) => {
+            layer.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight,
+                click: (e) => zoomToFeature(e, 'sls')
+            });
+        }
+    }).addTo(map);
+
+    addLegend(filtered, 'nmdesa', 'kddesa', feature => {
+        const layer = geojsonLayers.desa.getLayers().find(l => l.feature === feature);
+        if (layer) layer.fire('click');
+    });
 }
 
-function loadSLS(kddesa) {
-  loadGeoJSON("data/final_sls_202413309.geojson", slsStyle, "sls");
+function loadSLS(kdkec, kddesa) {
+    resetLayers('sls');
+    const filtered = dataGeojson.sls.features.filter(f => f.properties.kdkec === kdkec && f.properties.kddesa === kddesa);
+    geojsonLayers.sls = L.geoJSON(filtered, {
+        style: styleBase,
+        onEachFeature: (feature, layer) => {
+            layer.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight
+            });
+        }
+    }).addTo(map);
+
+    const bounds = geojsonLayers.sls.getBounds();
+    map.fitBounds(bounds);
+
+    addLegend(filtered, 'nmsls', 'kdsls', feature => {
+        const layer = geojsonLayers.sls.getLayers().find(l => l.feature === feature);
+        if (layer) map.fitBounds(layer.getBounds());
+    });
 }
 
-// Mulai dari kecamatan
-loadKecamatan();
+backButton.addEventListener('click', () => {
+    if (currentLevel === 'desa') {
+        currentLevel = 'kecamatan';
+        currentKec = null;
+        loadKecamatan();
+    } else if (currentLevel === 'sls') {
+        currentLevel = 'desa';
+        currentDesa = null;
+        loadDesa(currentKec);
+    }
+});
