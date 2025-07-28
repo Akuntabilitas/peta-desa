@@ -5,16 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Peta Interaktif Kabupaten</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-o2Qv1HSkXgWZHgAVn2m82+4NZz+2mbPpk+3G6u2yy4M="
+    crossorigin=""
+  />
 </head>
-<body class="level-kecamatan">
-  <div id="toolbar">
-    <button id="backBtn" onclick="goBack()" hidden>⬅ Kembali</button>
-    <span id="info">Klik wilayah untuk memperbesar</span>
-  </div>
+<body>
   <div id="map"></div>
+  <button id="backBtn" hidden onclick="goBack()">Kembali</button>
 
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-pM0I/flCkJIo6h/F2lVpzZpDvvY5/9AKkH+I8AA/4WY="
+    crossorigin=""
+  ></script>
   <script src="script.js"></script>
 </body>
 </html>
