@@ -47,7 +47,9 @@ function showKecamatan() {
   layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
     style: { color: '#333', weight: 1, fillOpacity: 0.2 },
     onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmkec, { sticky: true });
+      const code = feature.properties.kdkec; // atau kddesa / kdsls
+  layer.bindTooltip(feature.properties.nmkec, { sticky: true }); // label hover
+  addLabelToPolygon(layer, code); // label di tengah poligon
       layer.on({
         click: () => {
           selectedKecamatan = feature.properties.kdkec;
@@ -74,7 +76,9 @@ function showDesa() {
   layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
     onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
+      const code = feature.properties.kddesa; // atau kddesa / kdsls
+  layer.bindTooltip(feature.properties.nmdesa, { sticky: true }); // label hover
+  addLabelToPolygon(layer, code); // label di tengah poligon
       layer.on({
         click: () => {
           selectedDesa = feature.properties.kddesa;
@@ -103,7 +107,9 @@ function showSLS() {
   layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
     onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
+      const code = feature.properties.kdsls; // atau kddesa / kdsls
+  layer.bindTooltip(feature.properties.nmsls, { sticky: true }); // label hover
+  addLabelToPolygon(layer, code); // label di tengah poligon
       layer.on({
         click: () => {
           selectedSLS = feature.properties.kdsls;
@@ -230,6 +236,38 @@ function getPolygonCenter(geometry) {
   } catch (e) {
     return null;
   }
+}
+function addLabelToPolygon(layer, text) {
+  let center;
+
+  try {
+    center = layer.getCenter();
+  } catch (e) {
+    // Fallback ke rata-rata koordinat
+    const latlngs = layer.getLatLngs()[0];
+    let latSum = 0, lngSum = 0;
+    latlngs.forEach(latlng => {
+      latSum += latlng.lat;
+      lngSum += latlng.lng;
+    });
+    center = L.latLng(latSum / latlngs.length, lngSum / latlngs.length);
+  }
+
+  // Tentukan ukuran font berdasarkan zoom
+  const fontSize = Math.max(10, Math.min(16, map.getZoom() * 1.2));
+
+  const divIcon = L.divIcon({
+    className: 'label-code',
+    html: `<div style="font-size:${fontSize}px">${text}</div>`,
+    iconSize: null
+  });
+
+  const marker = L.marker(center, {
+    icon: divIcon,
+    interactive: false
+  });
+
+  marker.addTo(map);
 }
 
 document.getElementById('back-btn').addEventListener('click', () => {
