@@ -24,6 +24,25 @@ function updateLabelVisibility(level) {
   document.querySelectorAll('.label-sls').forEach(e => e.style.display = (level === 'sls') ? 'block' : 'none');
 }
 
+// Efek hover
+function addHoverEffect(layer) {
+  layer.on('mouseover', function () {
+    this.setStyle({ fillOpacity: 0.7 });
+    const tooltip = this.getTooltip();
+    if (tooltip && tooltip._container) {
+      tooltip._container.classList.add('hovered-label');
+    }
+  });
+
+  layer.on('mouseout', function () {
+    this.setStyle({ fillOpacity: 0.3 });
+    const tooltip = this.getTooltip();
+    if (tooltip && tooltip._container) {
+      tooltip._container.classList.remove('hovered-label');
+    }
+  });
+}
+
 // Load KECAMATAN
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
@@ -54,6 +73,8 @@ fetch('data/final_kec_202413309.geojson')
           backBtn.hidden = false;
           updateLabelVisibility(currentLevel);
         });
+
+        addHoverEffect(layer);
       }
     }).addTo(map);
 
@@ -94,6 +115,8 @@ function loadDesa(kdkec) {
             e.originalEvent.stopPropagation();
             updateLabelVisibility(currentLevel);
           });
+
+          addHoverEffect(layer);
         }
       }).addTo(map);
 
@@ -103,63 +126,4 @@ function loadDesa(kdkec) {
 
 // Load SLS
 function loadSLS(kddesa) {
-  fetch('data/final_sls_202413309.geojson')
-    .then(res => res.json())
-    .then(data => {
-      const filtered = {
-        ...data,
-        features: data.features.filter(f => f.properties.kddesa === kddesa)
-      };
-
-      slsLayer = L.geoJSON(filtered, {
-        style: defaultStyle,
-        onEachFeature: (feature, layer) => {
-          layer.bindTooltip(feature.properties.nmsls, {
-            permanent: true,
-            direction: 'center',
-            className: 'label label-sls'
-          });
-
-          layer.on('click', (e) => {
-            if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
-            selectedSLSLayer = layer;
-            layer.setStyle(highlightStyle);
-
-            map.fitBounds(layer.getBounds());
-            e.originalEvent.stopPropagation();
-          });
-        }
-      }).addTo(map);
-
-      updateLabelVisibility(currentLevel);
-    });
-}
-
-// Clear layer by level
-function clearLayers(levels) {
-  if (levels.includes('desa') && desaLayer) {
-    map.removeLayer(desaLayer);
-    desaLayer = null;
-  }
-  if (levels.includes('sls') && slsLayer) {
-    map.removeLayer(slsLayer);
-    slsLayer = null;
-  }
-}
-
-// Tombol kembali
-function goBack() {
-  if (currentLevel === 'sls') {
-    clearLayers(['sls']);
-    selectedSLSLayer = null;
-    currentLevel = 'desa';
-  } else if (currentLevel === 'desa') {
-    clearLayers(['desa', 'sls']);
-    selectedDesaLayer = null;
-    selectedKecLayer.setStyle(defaultStyle);
-    selectedKecLayer = null;
-    currentLevel = 'kecamatan';
-    backBtn.hidden = true;
-  }
-  updateLabelVisibility(currentLevel);
-}
+  fetch('data/final_sls_20
