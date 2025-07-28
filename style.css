@@ -1,53 +1,65 @@
+/* Style dasar peta */
 html, body, #map {
   height: 100%;
   margin: 0;
   padding: 0;
+  font-family: sans-serif;
 }
 
+/* Tombol kembali */
+#backBtn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  padding: 8px 14px;
+  background-color: white;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#backBtn:hover {
+  background-color: #f0f0f0;
+}
+
+/* Legenda */
 #legendBox {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 12px 15px;
-  border-radius: 8px;
-  box-shadow: 0 0 8px rgba(0,0,0,0.2);
-  max-height: 60vh;
+  width: 250px;
+  max-height: 80%;
   overflow-y: auto;
   z-index: 1000;
-  font-family: sans-serif;
-  font-size: 14px;
-  width: 220px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 15px;
 }
 
-#legendBox ul {
+#legendBox h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+}
+
+#legendList {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-#legendBox li {
+#legendList li {
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  padding: 4px 6px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
 }
 
-#legendBox li:hover {
-  background: #f0f0f0;
-}
-
-#backBtn {
-  margin-bottom: 10px;
-  padding: 6px 10px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-#backBtn:hover {
-  background: #0056b3;
+#legendList li:hover {
+  background-color: #e6f0ff;
 }
