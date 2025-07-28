@@ -1,21 +1,18 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Peta Hirarki Wilayah</title>
+  <meta charset="UTF-8">
+  <title>Peta Hirarkis Kecamatan → Desa → SLS</title>
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="map"></div>
-
-  <button id="backBtn" hidden>Kembali</button>
-
-  <div id="legendBox">
-    <h3 id="legendTitle">Legenda</h3>
-    <ul id="legendList"></ul>
+  <div id="legend">
+    <h4>Legenda</h4>
+    <ul id="legend-list"></ul>
   </div>
+  <button id="backBtn" hidden>Kembali</button>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="script.js"></script>
