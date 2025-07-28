@@ -1,25 +1,29 @@
-const map = L.map('map').setView([-7.5, 110.5], 10); // Sesuaikan pusat kabupaten
+const map = L.map('map').setView([-7.5, 110.5], 10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Global Layers & State
+// Global state
 let kecLayer, desaLayer, slsLayer;
 let selectedKecLayer = null;
 let selectedDesaLayer = null;
 let selectedSLSLayer = null;
 
-let currentLevel = 'kecamatan'; // ['kecamatan', 'desa', 'sls']
+let currentLevel = 'kecamatan';
 
 const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
 const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
 
-// UI
 const backBtn = document.getElementById('backBtn');
 const info = document.getElementById('info');
 
-// Load KECAMATAN
+function setLevel(level) {
+  currentLevel = level;
+  document.body.className = `level-${level}`;
+}
+
+// Load Kecamatan
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
   .then(data => {
@@ -27,9 +31,13 @@ fetch('data/final_kec_202413309.geojson')
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
         const label = feature.properties.nmkec;
-        layer.bindTooltip(label, { permanent: true, direction: 'center', className: 'label' });
+        layer.bindTooltip(label, {
+          permanent: true,
+          direction: 'center',
+          className: 'label label-kecamatan'
+        });
 
-        layer.on('click', () => {
+        layer.on('click', (e) => {
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
           selectedKecLayer = layer;
           layer.setStyle(highlightStyle);
@@ -41,14 +49,18 @@ fetch('data/final_kec_202413309.geojson')
           selectedSLSLayer = null;
 
           loadDesa(feature.properties.kdkec);
-          currentLevel = 'desa';
+          setLevel('desa');
           backBtn.hidden = false;
+          info.innerText = `Kecamatan: ${label}`;
+          e.originalEvent.stopPropagation();
         });
       }
     }).addTo(map);
+
+    setLevel('kecamatan');
   });
 
-// Load DESA
+// Load Desa
 function loadDesa(kdkec) {
   fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
@@ -58,10 +70,19 @@ function loadDesa(kdkec) {
         features: data.features.filter(f => f.properties.kdkec === kdkec)
       };
 
+      if (filtered.features.length === 0) {
+        alert("Tidak ada desa untuk kecamatan ini.");
+        return;
+      }
+
       desaLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          layer.bindTooltip(feature.properties.nmdesa, { permanent: true, direction: 'center', className: 'label' });
+          layer.bindTooltip(feature.properties.nmdesa, {
+            permanent: true,
+            direction: 'center',
+            className: 'label label-desa'
+          });
 
           layer.on('click', (e) => {
             if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
@@ -74,7 +95,8 @@ function loadDesa(kdkec) {
             selectedSLSLayer = null;
 
             loadSLS(feature.properties.kddesa);
-            currentLevel = 'sls';
+            setLevel('sls');
+            info.innerText = `Desa: ${feature.properties.nmdesa}`;
             e.originalEvent.stopPropagation();
           });
         }
@@ -92,10 +114,19 @@ function loadSLS(kddesa) {
         features: data.features.filter(f => f.properties.kddesa === kddesa)
       };
 
+      if (filtered.features.length === 0) {
+        alert("Tidak ada SLS untuk desa ini.");
+        return;
+      }
+
       slsLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          layer.bindTooltip(feature.properties.nmsls, { permanent: true, direction: 'center', className: 'label' });
+          layer.bindTooltip(feature.properties.nmsls, {
+            permanent: true,
+            direction: 'center',
+            className: 'label label-sls'
+          });
 
           layer.on('click', (e) => {
             if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
@@ -103,6 +134,7 @@ function loadSLS(kddesa) {
             layer.setStyle(highlightStyle);
 
             map.fitBounds(layer.getBounds());
+            info.innerText = `SLS: ${feature.properties.nmsls}`;
             e.originalEvent.stopPropagation();
           });
         }
@@ -127,13 +159,15 @@ function goBack() {
   if (currentLevel === 'sls') {
     clearLayers(['sls']);
     selectedSLSLayer = null;
-    currentLevel = 'desa';
+    setLevel('desa');
+    info.innerText = `Kecamatan: ${selectedKecLayer.feature.properties.nmkec} > Desa: ${selectedDesaLayer.feature.properties.nmdesa}`;
   } else if (currentLevel === 'desa') {
     clearLayers(['desa', 'sls']);
-    selectedDesaLayer = null;
-    selectedKecLayer.setStyle(defaultStyle);
+    if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
     selectedKecLayer = null;
-    currentLevel = 'kecamatan';
+    selectedDesaLayer = null;
+    setLevel('kecamatan');
     backBtn.hidden = true;
+    info.innerText = 'Klik wilayah untuk memperbesar';
   }
 }
