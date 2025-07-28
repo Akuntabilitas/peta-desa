@@ -171,4 +171,11 @@ function goBack() {
     selectedSLSLayer = null;
     currentLevel = 'desa';
   } else if (currentLevel === 'desa') {
-    cle
+    clearLayers(['desa', 'sls']);
+    clearLabels(['desa', 'sls']);
+    if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
+    selectedKecLayer = null;
+    currentLevel = 'kecamatan';
+    backBtn.hidden = true;
+  }
+}
