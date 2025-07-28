@@ -15,39 +15,58 @@ const hoverStyle = { weight: 2, color: '#000', fillOpacity: 0.9 };
 const backBtn = document.getElementById('backBtn');
 const legend = document.getElementById('legend');
 
-// ----------- Kecamatan ----------- //
+function updateLegend(items, onClick) {
+  legend.innerHTML = '';
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.textContent = item.label;
+    li.onclick = () => onClick(item.layer);
+    legend.appendChild(li);
+  });
+}
+
+// ----------- Kecamatan -----------
+
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
   .then(data => {
+    const items = [];
+
     kecLayer = L.geoJSON(data, {
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
-        const name = feature.properties.nmkec;
-        layer.bindTooltip(name, { direction: 'center', permanent: false });
+        layer.on('mouseover', () => layer.setStyle(hoverStyle));
+        layer.on('mouseout', () => {
+          if (layer !== selectedKecLayer) layer.setStyle(defaultStyle);
+        });
 
         layer.on('click', () => {
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
           selectedKecLayer = layer;
           layer.setStyle(highlightStyle);
-
           map.fitBounds(layer.getBounds());
+
           clearLayers(['desa', 'sls']);
           selectedDesaLayer = null;
           selectedSLSLayer = null;
-
-          loadDesa(feature.properties.kdkec);
           currentLevel = 'desa';
           backBtn.hidden = false;
-          updateLegend(desaLayer, 'nmdesa');
+
+          loadDesa(feature.properties.kdkec);
         });
 
-        addHoverEffect(layer, () => selectedKecLayer);
+        items.push({ label: feature.properties.nmkec, layer });
       }
     }).addTo(map);
-    updateLegend(kecLayer, 'nmkec');
+
+    updateLegend(items, (layer) => {
+      map.fitBounds(layer.getBounds());
+      layer.fire('click');
+    });
   });
 
-// ----------- Desa ----------- //
+// ----------- Desa -----------
+
 function loadDesa(kdkec) {
   fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
@@ -57,34 +76,43 @@ function loadDesa(kdkec) {
         features: data.features.filter(f => f.properties.kdkec === kdkec)
       };
 
+      const items = [];
+
       desaLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          const name = feature.properties.nmdesa;
-          layer.bindTooltip(name, { direction: 'center', permanent: false });
+          layer.on('mouseover', () => layer.setStyle(hoverStyle));
+          layer.on('mouseout', () => {
+            if (layer !== selectedDesaLayer) layer.setStyle(defaultStyle);
+          });
 
           layer.on('click', (e) => {
             if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
             selectedDesaLayer = layer;
             layer.setStyle(highlightStyle);
-
             map.fitBounds(layer.getBounds());
+
             clearLayers(['sls']);
             selectedSLSLayer = null;
+            currentLevel = 'sls';
 
             loadSLS(feature.properties.kddesa);
-            currentLevel = 'sls';
             e.originalEvent.stopPropagation();
           });
 
-          addHoverEffect(layer, () => selectedDesaLayer);
+          items.push({ label: feature.properties.nmdesa, layer });
         }
       }).addTo(map);
-      updateLegend(desaLayer, 'nmdesa');
+
+      updateLegend(items, (layer) => {
+        map.fitBounds(layer.getBounds());
+        layer.fire('click');
+      });
     });
 }
 
-// ----------- SLS ----------- //
+// ----------- SLS -----------
+
 function loadSLS(kddesa) {
   fetch('data/final_sls_202413309.geojson')
     .then(res => res.json())
@@ -94,34 +122,50 @@ function loadSLS(kddesa) {
         features: data.features.filter(f => f.properties.kddesa === kddesa)
       };
 
+      const items = [];
+
       slsLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          const name = feature.properties.nmsls;
-          layer.bindTooltip(name, { direction: 'center', permanent: false });
+          layer.on('mouseover', () => layer.setStyle(hoverStyle));
+          layer.on('mouseout', () => {
+            if (layer !== selectedSLSLayer) layer.setStyle(defaultStyle);
+          });
 
           layer.on('click', (e) => {
             if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
             selectedSLSLayer = layer;
             layer.setStyle(highlightStyle);
-
             map.fitBounds(layer.getBounds());
             e.originalEvent.stopPropagation();
           });
 
-          addHoverEffect(layer, () => selectedSLSLayer);
+          items.push({ label: feature.properties.nmsls, layer });
         }
       }).addTo(map);
-      updateLegend(slsLayer, 'nmsls');
+
+      updateLegend(items, (layer) => {
+        map.fitBounds(layer.getBounds());
+        layer.fire('click');
+      });
     });
 }
 
-// ----------- Util Functions ----------- //
-function addHoverEffect(layer, getSelected) {
-  layer.on('mouseover', () => layer.setStyle(hoverStyle));
-  layer.on('mouseout', () => {
-    if (layer !== getSelected()) layer.setStyle(defaultStyle);
-  });
+// ----------- Tombol Kembali -----------
+
+function goBack() {
+  if (currentLevel === 'sls') {
+    clearLayers(['sls']);
+    selectedSLSLayer = null;
+    currentLevel = 'desa';
+  } else if (currentLevel === 'desa') {
+    clearLayers(['desa', 'sls']);
+    selectedDesaLayer = null;
+    selectedKecLayer.setStyle(defaultStyle);
+    selectedKecLayer = null;
+    currentLevel = 'kecamatan';
+    backBtn.hidden = true;
+  }
 }
 
 function clearLayers(levels) {
@@ -132,39 +176,5 @@ function clearLayers(levels) {
   if (levels.includes('sls') && slsLayer) {
     map.removeLayer(slsLayer);
     slsLayer = null;
-  }
-}
-
-function updateLegend(layerGroup, labelProp) {
-  legend.innerHTML = '';
-  if (!layerGroup) return;
-
-  layerGroup.eachLayer(layer => {
-    const name = layer.feature.properties[labelProp];
-    const li = document.createElement('li');
-    li.textContent = name;
-    li.style.cursor = 'pointer';
-    li.onclick = () => {
-      map.fitBounds(layer.getBounds());
-      layer.fire('click');
-    };
-    legend.appendChild(li);
-  });
-}
-
-// ----------- Tombol Kembali ----------- //
-function goBack() {
-  if (currentLevel === 'sls') {
-    clearLayers(['sls']);
-    selectedSLSLayer = null;
-    currentLevel = 'desa';
-    updateLegend(desaLayer, 'nmdesa');
-  } else if (currentLevel === 'desa') {
-    clearLayers(['desa', 'sls']);
-    if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
-    selectedKecLayer = null;
-    currentLevel = 'kecamatan';
-    updateLegend(kecLayer, 'nmkec');
-    backBtn.hidden = true;
   }
 }
