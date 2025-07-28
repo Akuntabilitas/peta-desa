@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Peta Interaktif Kabupaten</title>
-  <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <button id="backBtn" onclick="goBack()" hidden>Kembali</button>
-<ul id="legend" style="list-style:none; padding: 10px;"></ul>
-
   <div id="map"></div>
+  <div id="legendBox">
+    <button id="backBtn" onclick="goBack()" hidden>Kembali</button>
+    <ul id="legend"></ul>
+  </div>
+  
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="script.js"></script>
 </body>
