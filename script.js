@@ -14,15 +14,60 @@ const hoverStyle = { weight: 2, color: '#000', fillOpacity: 0.9 };
 
 const backBtn = document.getElementById('backBtn');
 
-// ----------- Kecamatan -----------
+// ---------- UTILITY ----------
+function createLabel(content, layer) {
+  return L.tooltip({
+    permanent: true,
+    direction: 'center',
+    className: 'label'
+  }).setContent(content).setLatLng(layer.getBounds().getCenter());
+}
+
+function addHoverEffect(layer, getSelected) {
+  layer.on('mouseover', () => layer.setStyle(hoverStyle));
+  layer.on('mouseout', () => {
+    if (layer !== getSelected()) layer.setStyle(defaultStyle);
+  });
+}
+
+function addLabels(layerGroup) {
+  layerGroup.eachLayer(layer => {
+    if (layer._label) map.addLayer(layer._label);
+  });
+}
+
+function clearLabels(levels) {
+  [kecLayer, desaLayer, slsLayer].forEach(group => {
+    if (group) {
+      group.eachLayer(layer => {
+        if (layer._label) {
+          map.removeLayer(layer._label);
+          layer._label = null;
+        }
+      });
+    }
+  });
+}
+
+function clearLayers(levels) {
+  if (levels.includes('desa') && desaLayer) {
+    map.removeLayer(desaLayer);
+    desaLayer = null;
+  }
+  if (levels.includes('sls') && slsLayer) {
+    map.removeLayer(slsLayer);
+    slsLayer = null;
+  }
+}
+
+// ---------- KECAMATAN ----------
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
   .then(data => {
     kecLayer = L.geoJSON(data, {
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
-        const label = feature.properties.nmkec;
-        layer._label = createLabel(label, layer);
+        layer._label = createLabel(feature.properties.nmkec, layer);
 
         layer.on('click', () => {
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
@@ -47,7 +92,7 @@ fetch('data/final_kec_202413309.geojson')
     addLabels(kecLayer);
   });
 
-// ----------- Desa -----------
+// ---------- DESA ----------
 function loadDesa(kdkec) {
   fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
@@ -60,8 +105,7 @@ function loadDesa(kdkec) {
       desaLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          const label = feature.properties.nmdesa;
-          layer._label = createLabel(label, layer);
+          layer._label = createLabel(feature.properties.nmdesa, layer);
 
           layer.on('click', (e) => {
             if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
@@ -85,7 +129,7 @@ function loadDesa(kdkec) {
     });
 }
 
-// ----------- SLS -----------
+// ---------- SLS ----------
 function loadSLS(kddesa) {
   fetch('data/final_sls_202413309.geojson')
     .then(res => res.json())
@@ -98,8 +142,7 @@ function loadSLS(kddesa) {
       slsLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          const label = feature.properties.nmsls;
-          layer._label = createLabel(label, layer);
+          layer._label = createLabel(feature.properties.nmsls, layer);
 
           layer.on('click', (e) => {
             if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
@@ -117,53 +160,7 @@ function loadSLS(kddesa) {
     });
 }
 
-// ----------- Util Functions -----------
-function createLabel(content, layer) {
-  return L.tooltip({
-    permanent: true,
-    direction: 'center',
-    className: 'label'
-  }).setContent(content).setLatLng(layer.getBounds().getCenter());
-}
-
-function addHoverEffect(layer, getSelected) {
-  layer.on('mouseover', () => layer.setStyle(hoverStyle));
-  layer.on('mouseout', () => {
-    if (layer !== getSelected()) layer.setStyle(defaultStyle);
-  });
-}
-
-function addLabels(layerGroup) {
-  layerGroup.eachLayer(layer => {
-    if (layer._label) map.addLayer(layer._label);
-  });
-}
-
-function clearLayers(levels) {
-  if (levels.includes('desa') && desaLayer) {
-    map.removeLayer(desaLayer);
-    desaLayer = null;
-  }
-  if (levels.includes('sls') && slsLayer) {
-    map.removeLayer(slsLayer);
-    slsLayer = null;
-  }
-}
-
-function clearLabels(levels) {
-  [kecLayer, desaLayer, slsLayer].forEach(layerGroup => {
-    if (layerGroup) {
-      layerGroup.eachLayer(layer => {
-        if (layer._label) {
-          map.removeLayer(layer._label);
-          layer._label = null;
-        }
-      });
-    }
-  });
-}
-
-// ----------- Tombol Kembali -----------
+// ---------- KEMBALI ----------
 function goBack() {
   if (currentLevel === 'sls') {
     clearLayers(['sls']);
