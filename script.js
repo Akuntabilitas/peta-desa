@@ -1,11 +1,16 @@
-const map = L.map('map').setView([-7.5, 110.5], 10); // Sesuaikan koordinat tengah kabupaten
+const map = L.map('map').setView([-7.5, 110.5], 10); // Sesuaikan titik tengah kabupaten Anda
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap'
+  attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// Global layers
 let kecLayer, desaLayer, slsLayer;
+let selectedKecLayer = null;
+let selectedDesaLayer = null;
+let selectedSLSLayer = null;
 
+// Style
 const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
 const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
 
@@ -18,18 +23,26 @@ fetch('data/final_kec_202413309.geojson')
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.nmkec);
         layer.on('click', () => {
-          map.fitBounds(layer.getBounds());
-          resetStyles(kecLayer);
+          // Reset previous highlight
+          if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
+          selectedKecLayer = layer;
           layer.setStyle(highlightStyle);
+
+          map.fitBounds(layer.getBounds());
+
+          // Remove old layers
           if (desaLayer) map.removeLayer(desaLayer);
           if (slsLayer) map.removeLayer(slsLayer);
+          selectedDesaLayer = null;
+          selectedSLSLayer = null;
+
           loadDesa(feature.properties.kdkec);
         });
       }
     }).addTo(map);
   });
 
-// Load DESA berdasarkan kdkec
+// Load DESA dalam kecamatan tertentu
 function loadDesa(kdkec) {
   fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
@@ -39,23 +52,31 @@ function loadDesa(kdkec) {
         features: data.features.filter(f => f.properties.kdkec === kdkec)
       };
       desaLayer = L.geoJSON(filtered, {
-        style: { color: '#0077be', weight: 1, fillOpacity: 0.4 },
+        style: defaultStyle,
         onEachFeature: (feature, layer) => {
           layer.bindTooltip(feature.properties.nmdesa);
           layer.on('click', (e) => {
-            map.fitBounds(layer.getBounds());
-            resetStyles(desaLayer);
+            // Reset desa highlight
+            if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
+            selectedDesaLayer = layer;
             layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
+
+            // Remove old SLS
             if (slsLayer) map.removeLayer(slsLayer);
+            selectedSLSLayer = null;
+
             loadSLS(feature.properties.kddesa);
-            e.originalEvent.stopPropagation();
+
+            e.originalEvent.stopPropagation(); // Jangan trigger event di layer di bawahnya
           });
         }
       }).addTo(map);
     });
 }
 
-// Load SLS berdasarkan kddesa
+// Load SLS dalam desa tertentu
 function loadSLS(kddesa) {
   fetch('data/final_sls_202413309.geojson')
     .then(res => res.json())
@@ -65,22 +86,19 @@ function loadSLS(kddesa) {
         features: data.features.filter(f => f.properties.kddesa === kddesa)
       };
       slsLayer = L.geoJSON(filtered, {
-        style: { color: '#00aa55', weight: 1, fillOpacity: 0.3 },
+        style: defaultStyle,
         onEachFeature: (feature, layer) => {
           layer.bindTooltip(feature.properties.nmsls);
           layer.on('click', (e) => {
-            resetStyles(slsLayer);
-            layer.setStyle({ color: '#f00', weight: 2, fillOpacity: 0.5 });
+            // Reset SLS highlight
+            if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
+            selectedSLSLayer = layer;
+            layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
             e.originalEvent.stopPropagation();
           });
         }
       }).addTo(map);
     });
-}
-
-// Fungsi bantu reset style
-function resetStyles(layerGroup) {
-  if (layerGroup) {
-    layerGroup.eachLayer(layer => layer.setStyle(defaultStyle));
-  }
 }
