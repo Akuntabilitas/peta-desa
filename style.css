@@ -1,68 +1,66 @@
-html, body, #map {
-  height: 100%;
+/* style.css */
+
+html, body {
   margin: 0;
   padding: 0;
-  font-family: sans-serif;
+  height: 100%;
+  font-family: Arial, sans-serif;
 }
 
-#backBtn {
+#map {
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+
+#legend {
   position: absolute;
   top: 10px;
-  left: 10px;
-  z-index: 1000;
-  padding: 8px 14px;
-  background-color: white;
+  right: 10px;
+  background: white;
   border: 1px solid #aaa;
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 80%;
+  width: 240px;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 999;
+}
+
+#back-btn {
+  display: block;
+  margin-bottom: 10px;
+  background-color: #219ebc;
+  color: white;
+  border: none;
   border-radius: 4px;
+  padding: 6px 12px;
   cursor: pointer;
   font-size: 14px;
 }
 
-#backBtn:hover {
-  background-color: #f0f0f0;
+#back-btn:hover {
+  background-color: #126782;
 }
 
-#legendBox {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 220px;
-  max-height: 80%;
-  overflow-y: auto;
-  z-index: 1000;
-  background-color: rgba(255, 255, 255, 0.95);
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 10px 15px;
-}
-
-#legendBox h3 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  border-bottom: 1px solid #ddd;
-  padding-bottom: 4px;
-}
-
-#legendList {
+#legend-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-#legendList li {
+.legend-item {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 4px;
   cursor: pointer;
-  padding: 5px 6px;
-  font-size: 14px;
-  border-bottom: 1px solid #eee;
+  transition: background 0.2s;
+  border: 1px solid transparent;
 }
 
-#legendList li:hover {
-  background-color: #e6f0ff;
-}
-
-/* Hover polygon style */
-.hovered {
-  fill-opacity: 0.6 !important;
-  color: #2a7be4 !important;
-  weight: 3 !important;
+.legend-item:hover {
+  background-color: #e0f3ff;
+  border-color: #219ebc;
+  font-weight: bold;
 }
