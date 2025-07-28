@@ -26,6 +26,7 @@ function loadKecamatan() {
   fetch('data/final_kec_202413309.geojson')
     .then(res => res.json())
     .then(data => {
+      resetLegend();
       kecLayer = L.geoJSON(data, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
@@ -37,7 +38,6 @@ function loadKecamatan() {
             currentKecCode = kode;
             map.fitBounds(layer.getBounds());
             resetMap();
-            resetLegend();
             loadDesa(kode);
             currentLevel = 'desa';
             backBtn.hidden = false;
@@ -52,21 +52,24 @@ function loadKecamatan() {
             layer.closeTooltip();
           });
 
+          // Tambahkan ke legenda SETELAH layer ditambahkan ke map
           const li = document.createElement('li');
           li.textContent = label;
-          li.onclick = () => {
-            map.fitBounds(layer.getBounds());
-          };
+          li.onclick = () => map.fitBounds(layer.getBounds());
+          li.onmouseover = () => layer.setStyle(highlightStyle);
+          li.onmouseout = () => layer.setStyle(defaultStyle);
           legend.appendChild(li);
         }
       }).addTo(map);
     });
 }
 
+
 function loadDesa(kdkec) {
   fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
     .then(data => {
+      resetLegend();
       const filtered = data.features.filter(f => f.properties.kdkec === kdkec);
       const sorted = filtered.sort((a, b) => a.properties.kddesa.localeCompare(b.properties.kddesa));
 
@@ -81,7 +84,6 @@ function loadDesa(kdkec) {
             currentDesaCode = kode;
             map.fitBounds(layer.getBounds());
             resetMap();
-            resetLegend();
             loadSLS(kode);
             currentLevel = 'sls';
           });
@@ -97,9 +99,9 @@ function loadDesa(kdkec) {
 
           const li = document.createElement('li');
           li.textContent = label;
-          li.onclick = () => {
-            map.fitBounds(layer.getBounds());
-          };
+          li.onclick = () => map.fitBounds(layer.getBounds());
+          li.onmouseover = () => layer.setStyle(highlightStyle);
+          li.onmouseout = () => layer.setStyle(defaultStyle);
           legend.appendChild(li);
         }
       }).addTo(map);
