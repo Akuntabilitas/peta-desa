@@ -1,43 +1,24 @@
-const map = L.map('map').setView([-7.5, 110.5], 10);
+const map = L.map('map').setView([-7.5, 110.5], 10); // Sesuaikan dengan lokasi kabupaten
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// Global Layers & State
 let kecLayer, desaLayer, slsLayer;
 let selectedKecLayer = null;
 let selectedDesaLayer = null;
 let selectedSLSLayer = null;
+
 let currentLevel = 'kecamatan';
+document.body.className = 'show-kecamatan';
 
 const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
 const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
 
+// UI
 const backBtn = document.getElementById('backBtn');
-
-function updateLabelVisibility(level) {
-  document.querySelectorAll('.label-kecamatan').forEach(e => e.style.display = (level === 'kecamatan') ? 'block' : 'none');
-  document.querySelectorAll('.label-desa').forEach(e => e.style.display = (level === 'desa') ? 'block' : 'none');
-  document.querySelectorAll('.label-sls').forEach(e => e.style.display = (level === 'sls') ? 'block' : 'none');
-}
-
-function addHoverEffect(layer) {
-  layer.on('mouseover', function () {
-    this.setStyle({ fillOpacity: 0.6 });
-    const tooltip = this.getTooltip();
-    if (tooltip && tooltip._container) {
-      tooltip._container.classList.add('hovered');
-    }
-  });
-
-  layer.on('mouseout', function () {
-    this.setStyle({ fillOpacity: 0.3 });
-    const tooltip = this.getTooltip();
-    if (tooltip && tooltip._container) {
-      tooltip._container.classList.remove('hovered');
-    }
-  });
-}
+const info = document.getElementById('info');
 
 // Load KECAMATAN
 fetch('data/final_kec_202413309.geojson')
@@ -46,10 +27,93 @@ fetch('data/final_kec_202413309.geojson')
     kecLayer = L.geoJSON(data, {
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
-        layer.bindTooltip(feature.properties.nmkec, {
-          permanent: true,
-          direction: 'center',
-          className: 'label label-kecamatan'
-        });
+        const label = feature.properties.nmkec;
+        layer.bindTooltip(label, { permanent: true, direction: 'center', className: 'label label-kec' });
 
-        layer.o
+        layer.on('click', () => {
+          if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
+          selectedKecLayer = layer;
+          layer.setStyle(highlightStyle);
+
+          map.fitBounds(layer.getBounds());
+
+          clearLayers(['desa', 'sls']);
+          selectedDesaLayer = null;
+          selectedSLSLayer = null;
+
+          loadDesa(feature.properties.kdkec);
+          currentLevel = 'desa';
+          document.body.className = 'show-desa';
+          backBtn.hidden = false;
+        });
+      }
+    }).addTo(map);
+  });
+
+// Load DESA
+function loadDesa(kdkec) {
+  fetch('data/final_desa_202413309.geojson')
+    .then(res => res.json())
+    .then(data => {
+      const filtered = {
+        ...data,
+        features: data.features.filter(f => f.properties.kdkec === kdkec)
+      };
+
+      desaLayer = L.geoJSON(filtered, {
+        style: defaultStyle,
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nmdesa, { permanent: true, direction: 'center', className: 'label label-desa' });
+
+          layer.on('click', (e) => {
+            if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
+            selectedDesaLayer = layer;
+            layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
+
+            clearLayers(['sls']);
+            selectedSLSLayer = null;
+
+            loadSLS(feature.properties.kddesa);
+            currentLevel = 'sls';
+            document.body.className = 'show-sls';
+            e.originalEvent.stopPropagation();
+          });
+        }
+      }).addTo(map);
+    });
+}
+
+// Load SLS
+function loadSLS(kddesa) {
+  fetch('data/final_sls_202413309.geojson')
+    .then(res => res.json())
+    .then(data => {
+      const filtered = {
+        ...data,
+        features: data.features.filter(f => f.properties.kddesa === kddesa)
+      };
+
+      slsLayer = L.geoJSON(filtered, {
+        style: defaultStyle,
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nmsls, { permanent: true, direction: 'center', className: 'label label-sls' });
+
+          layer.on('click', (e) => {
+            if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
+            selectedSLSLayer = layer;
+            layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
+            e.originalEvent.stopPropagation();
+          });
+        }
+      }).addTo(map);
+    });
+}
+
+// Clear layer by level
+function clearLayers(levels) {
+  if (levels.includes('desa') && desaLayer) {
+    ma
