@@ -1,54 +1,53 @@
-const map = L.map('map').setView([-7.5, 110.5], 10);
+const map = L.map('map').setView([-7.5, 110.6], 10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+  maxZoom: 19,
 }).addTo(map);
 
-let kecLayer, desaLayer, slsLayer;
-let selectedKecLayer = null, selectedDesaLayer = null, selectedSLSLayer = null;
-let currentLevel = 'kecamatan';
+const defaultStyle = {
+  color: '#555',
+  weight: 1,
+  fillOpacity: 0.2,
+};
 
-const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
-const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.7 };
-const hoverStyle = { weight: 2, color: '#000', fillOpacity: 0.9 };
+const highlightStyle = {
+  color: '#007bff',
+  weight: 2,
+  fillOpacity: 0.5,
+};
+
+let currentLevel = 'kecamatan';
+let selectedKecLayer = null;
+let selectedDesaLayer = null;
+let selectedSLSLayer = null;
+
+let kecLayer, desaLayer, slsLayer;
+
+let visibleKecLabel = false;
+let visibleDesaLabel = false;
+let visibleSLSLabel = false;
 
 const backBtn = document.getElementById('backBtn');
 
-// ---------- UTILITY ----------
-function createLabel(content, layer) {
-  return L.tooltip({
-    permanent: true,
-    direction: 'center',
-    className: 'label'
-  }).setContent(content).setLatLng(layer.getBounds().getCenter());
-}
-
-function addHoverEffect(layer, getSelected) {
-  layer.on('mouseover', () => layer.setStyle(hoverStyle));
-  layer.on('mouseout', () => {
-    if (layer !== getSelected()) layer.setStyle(defaultStyle);
-  });
-}
-
-function addLabels(layerGroup) {
+// Fungsi Tambah Label ke Layer
+function addLabels(layerGroup, namaField) {
   layerGroup.eachLayer(layer => {
-    if (layer._label) map.addLayer(layer._label);
+    const nama = layer.feature.properties[namaField];
+    const center = layer.getBounds().getCenter();
+    const label = L.tooltip({
+      permanent: true,
+      direction: 'center',
+      className: 'label',
+      opacity: 0.8,
+    })
+      .setContent(nama)
+      .setLatLng(center);
+    layer.bindTooltip(label);
+    layer._label = label;
   });
 }
 
-function clearLabels(levels) {
-  [kecLayer, desaLayer, slsLayer].forEach(group => {
-    if (group) {
-      group.eachLayer(layer => {
-        if (layer._label) {
-          map.removeLayer(layer._label);
-          layer._label = null;
-        }
-      });
-    }
-  });
-}
-
+// Fungsi Clear Layer
 function clearLayers(levels) {
   if (levels.includes('desa') && desaLayer) {
     map.removeLayer(desaLayer);
@@ -60,119 +59,80 @@ function clearLayers(levels) {
   }
 }
 
-// ---------- KECAMATAN ----------
-fetch('data/final_kec_202413309.geojson')
+// Fungsi Clear Label
+function clearLabels(levels) {
+  if (levels.includes('kecamatan') && kecLayer) {
+    kecLayer.eachLayer(l => {
+      if (l._label) map.removeLayer(l._label);
+    });
+    visibleKecLabel = false;
+  }
+  if (levels.includes('desa') && desaLayer) {
+    desaLayer.eachLayer(l => {
+      if (l._label) map.removeLayer(l._label);
+    });
+    visibleDesaLabel = false;
+  }
+  if (levels.includes('sls') && slsLayer) {
+    slsLayer.eachLayer(l => {
+      if (l._label) map.removeLayer(l._label);
+    });
+    visibleSLSLabel = false;
+  }
+}
+
+// Load Kecamatan
+fetch('kecamatan.geojson')
   .then(res => res.json())
   .then(data => {
-    kecLayer = L.geoJSON(data, {
+    kecLayer = L.geoJson(data, {
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
-        layer._label = createLabel(feature.properties.nmkec, layer);
-
+        addLabels(kecLayer = L.geoJson(data));
         layer.on('click', () => {
+          if (selectedKecLayer && selectedKecLayer._label) {
+            map.removeLayer(selectedKecLayer._label);
+          }
+
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
           selectedKecLayer = layer;
           layer.setStyle(highlightStyle);
 
-          map.fitBounds(layer.getBounds());
           clearLayers(['desa', 'sls']);
-          clearLabels(['desa', 'sls']);
+          clearLabels(['desa', 'sls', 'kecamatan']);
 
-          selectedDesaLayer = null;
-          selectedSLSLayer = null;
+          if (layer._label) map.addLayer(layer._label);
+
+          map.fitBounds(layer.getBounds());
 
           loadDesa(feature.properties.kdkec);
           currentLevel = 'desa';
           backBtn.hidden = false;
         });
-
-        addHoverEffect(layer, () => selectedKecLayer);
-      }
+        layer.on('mouseover', () => layer.setStyle(highlightStyle));
+        layer.on('mouseout', () => {
+          if (layer !== selectedKecLayer) layer.setStyle(defaultStyle);
+        });
+      },
     }).addTo(map);
-    addLabels(kecLayer);
+
+    addLabels(kecLayer, 'nmkec');
+    visibleKecLabel = true;
   });
 
-// ---------- DESA ----------
+// Load Desa
 function loadDesa(kdkec) {
-  fetch('data/final_desa_202413309.geojson')
+  fetch(`desa_${kdkec}.geojson`)
     .then(res => res.json())
     .then(data => {
-      const filtered = {
-        ...data,
-        features: data.features.filter(f => f.properties.kdkec === kdkec)
-      };
-
-      desaLayer = L.geoJSON(filtered, {
+      desaLayer = L.geoJson(data, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          layer._label = createLabel(feature.properties.nmdesa, layer);
-
-          layer.on('click', (e) => {
-            if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
-            selectedDesaLayer = layer;
-            layer.setStyle(highlightStyle);
-
-            map.fitBounds(layer.getBounds());
-            clearLayers(['sls']);
-            clearLabels(['sls']);
-            selectedSLSLayer = null;
-
-            loadSLS(feature.properties.kddesa);
-            currentLevel = 'sls';
-            e.originalEvent.stopPropagation();
-          });
-
-          addHoverEffect(layer, () => selectedDesaLayer);
-        }
-      }).addTo(map);
-      addLabels(desaLayer);
-    });
-}
-
-// ---------- SLS ----------
-function loadSLS(kddesa) {
-  fetch('data/final_sls_202413309.geojson')
-    .then(res => res.json())
-    .then(data => {
-      const filtered = {
-        ...data,
-        features: data.features.filter(f => f.properties.kddesa === kddesa)
-      };
-
-      slsLayer = L.geoJSON(filtered, {
-        style: defaultStyle,
-        onEachFeature: (feature, layer) => {
-          layer._label = createLabel(feature.properties.nmsls, layer);
-
-          layer.on('click', (e) => {
-            if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
-            selectedSLSLayer = layer;
-            layer.setStyle(highlightStyle);
-
-            map.fitBounds(layer.getBounds());
-            e.originalEvent.stopPropagation();
-          });
-
-          addHoverEffect(layer, () => selectedSLSLayer);
-        }
-      }).addTo(map);
-      addLabels(slsLayer);
-    });
-}
-
-// ---------- KEMBALI ----------
-function goBack() {
-  if (currentLevel === 'sls') {
-    clearLayers(['sls']);
-    clearLabels(['sls']);
-    selectedSLSLayer = null;
-    currentLevel = 'desa';
-  } else if (currentLevel === 'desa') {
-    clearLayers(['desa', 'sls']);
-    clearLabels(['desa', 'sls']);
-    if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
-    selectedKecLayer = null;
-    currentLevel = 'kecamatan';
-    backBtn.hidden = true;
-  }
-}
+          const nama = feature.properties.nmdesa;
+          const center = layer.getBounds().getCenter();
+          const label = L.tooltip({
+            permanent: true,
+            direction: 'center',
+            className: 'label',
+            opacity: 0.8,
+          })
