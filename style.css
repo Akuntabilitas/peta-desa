@@ -26,27 +26,29 @@ body, html {
   margin-right: 8px;
 }
 
-.leaflet-tooltip.label {
-  font-size: 10px;
+/* Label styling */
+.label {
+  font-size: 12px;
   font-weight: bold;
   color: #333;
-  background: rgba(255, 255, 255, 0.7);
-  border: none;
-  box-shadow: none;
-  padding: 2px 4px;
-  border-radius: 4px;
-  text-align: center;
-  white-space: nowrap;
-  transition: transform 0.2s ease;
+  text-shadow: 0 0 2px white;
+  pointer-events: none;
 }
 
-.label-kecamatan,
-.label-desa,
-.label-sls {
+/* Sembunyikan semua label */
+.label-kec, .label-desa, .label-sls {
   display: none;
 }
 
-.leaflet-tooltip.label.hovered {
-  transform: scale(1.3);
-  z-index: 1000;
+/* Tampilkan label sesuai level */
+body.show-kecamatan .label-kec {
+  display: block;
+}
+
+body.show-desa .label-desa {
+  display: block;
+}
+
+body.show-sls .label-sls {
+  display: block;
 }
