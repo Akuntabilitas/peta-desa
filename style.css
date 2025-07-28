@@ -27,7 +27,7 @@ body, html {
 }
 
 .leaflet-tooltip.label {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #333;
   background: rgba(255, 255, 255, 0.7);
@@ -37,10 +37,16 @@ body, html {
   border-radius: 4px;
   text-align: center;
   white-space: nowrap;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .label-kecamatan,
 .label-desa,
 .label-sls {
-  display: none; /* default sembunyi, nanti dimunculkan sesuai level */
+  display: none;
+}
+
+.hovered-label {
+  transform: scale(1.3);
+  z-index: 1000;
 }
