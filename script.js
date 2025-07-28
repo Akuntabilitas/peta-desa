@@ -13,30 +13,7 @@ let currentLevel = 'kecamatan';
 const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
 const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
 
-// untuk menampung label-label aktif
-let labelLayerGroup = L.layerGroup().addTo(map);
-
-// UI
 const backBtn = document.getElementById('backBtn');
-
-// -- FUNGSI: Tambah label di tengah polygon
-function addLabelToPolygon(feature, text, className) {
-  const center = L.geoJSON(feature).getBounds().getCenter();
-  const label = L.marker(center, {
-    icon: L.divIcon({
-      className: `label-icon ${className}`,
-      html: text,
-      iconSize: null
-    }),
-    interactive: false
-  });
-  labelLayerGroup.addLayer(label);
-}
-
-// -- FUNGSI: Hapus semua label
-function clearLabels() {
-  labelLayerGroup.clearLayers();
-}
 
 // -- KECAMATAN
 fetch('data/final_kec_202413309.geojson')
@@ -45,6 +22,12 @@ fetch('data/final_kec_202413309.geojson')
     kecLayer = L.geoJSON(data, {
       style: defaultStyle,
       onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.nmkec, {
+          permanent: true,
+          direction: 'center',
+          className: 'label-tooltip'
+        });
+
         layer.on('click', () => {
           if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
           selectedKecLayer = layer;
@@ -52,7 +35,6 @@ fetch('data/final_kec_202413309.geojson')
 
           map.fitBounds(layer.getBounds());
           clearLayers(['desa', 'sls']);
-          clearLabels();
           selectedDesaLayer = null;
           selectedSLSLayer = null;
 
@@ -63,11 +45,6 @@ fetch('data/final_kec_202413309.geojson')
         });
       }
     }).addTo(map);
-
-    clearLabels();
-    data.features.forEach(f =>
-      addLabelToPolygon(f, f.properties.nmkec, 'label-kec')
-    );
   });
 
 // -- DESA
@@ -83,6 +60,12 @@ function loadDesa(kdkec) {
       desaLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nmdesa, {
+            permanent: true,
+            direction: 'center',
+            className: 'label-tooltip'
+          });
+
           layer.on('click', (e) => {
             if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
             selectedDesaLayer = layer;
@@ -91,7 +74,6 @@ function loadDesa(kdkec) {
             map.fitBounds(layer.getBounds());
 
             clearLayers(['sls']);
-            clearLabels();
             selectedSLSLayer = null;
 
             currentLevel = 'sls';
@@ -101,11 +83,6 @@ function loadDesa(kdkec) {
           });
         }
       }).addTo(map);
-
-      clearLabels();
-      filtered.features.forEach(f =>
-        addLabelToPolygon(f, f.properties.nmdesa, 'label-desa')
-      );
     });
 }
 
@@ -122,6 +99,12 @@ function loadSLS(kddesa) {
       slsLayer = L.geoJSON(filtered, {
         style: defaultStyle,
         onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nmsls, {
+            permanent: true,
+            direction: 'center',
+            className: 'label-tooltip'
+          });
+
           layer.on('click', (e) => {
             if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
             selectedSLSLayer = layer;
@@ -132,11 +115,6 @@ function loadSLS(kddesa) {
           });
         }
       }).addTo(map);
-
-      clearLabels();
-      filtered.features.forEach(f =>
-        addLabelToPolygon(f, f.properties.nmsls, 'label-sls')
-      );
     });
 }
 
@@ -156,17 +134,10 @@ function clearLayers(levels) {
 function goBack() {
   if (currentLevel === 'sls') {
     clearLayers(['sls']);
-    clearLabels();
     selectedSLSLayer = null;
     currentLevel = 'desa';
-
-    // tampilkan ulang label desa
-    desaLayer.eachLayer(l =>
-      addLabelToPolygon(l.feature, l.feature.properties.nmdesa, 'label-desa')
-    );
   } else if (currentLevel === 'desa') {
     clearLayers(['desa', 'sls']);
-    clearLabels();
     if (selectedKecLayer) {
       selectedKecLayer.setStyle(defaultStyle);
       selectedKecLayer = null;
@@ -175,10 +146,5 @@ function goBack() {
     selectedSLSLayer = null;
     currentLevel = 'kecamatan';
     backBtn.hidden = true;
-
-    // tampilkan ulang label kecamatan
-    kecLayer.eachLayer(l =>
-      addLabelToPolygon(l.feature, l.feature.properties.nmkec, 'label-kec')
-    );
   }
 }
