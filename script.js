@@ -15,18 +15,15 @@ const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
 
 const backBtn = document.getElementById('backBtn');
 
-// Fungsi update label terlihat berdasarkan level
 function updateLabelVisibility(level) {
   document.querySelectorAll('.label-kecamatan').forEach(e => e.style.display = (level === 'kecamatan') ? 'block' : 'none');
   document.querySelectorAll('.label-desa').forEach(e => e.style.display = (level === 'desa') ? 'block' : 'none');
   document.querySelectorAll('.label-sls').forEach(e => e.style.display = (level === 'sls') ? 'block' : 'none');
 }
 
-// Efek hover polygon: naikkan fillOpacity & besarkan label
 function addHoverEffect(layer) {
   layer.on('mouseover', function () {
     this.setStyle({ fillOpacity: 0.6 });
-
     const tooltip = this.getTooltip();
     if (tooltip && tooltip._container) {
       tooltip._container.classList.add('hovered');
@@ -35,7 +32,6 @@ function addHoverEffect(layer) {
 
   layer.on('mouseout', function () {
     this.setStyle({ fillOpacity: 0.3 });
-
     const tooltip = this.getTooltip();
     if (tooltip && tooltip._container) {
       tooltip._container.classList.remove('hovered');
@@ -56,13 +52,4 @@ fetch('data/final_kec_202413309.geojson')
           className: 'label label-kecamatan'
         });
 
-        layer.on('click', () => {
-          if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
-          selectedKecLayer = layer;
-          layer.setStyle(highlightStyle);
-
-          map.fitBounds(layer.getBounds());
-
-          clearLayers(['desa', 'sls']);
-          selectedDesaLayer = null;
-          selectedSLSLayer = null;
+        layer.o
