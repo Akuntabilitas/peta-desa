@@ -1,7 +1,8 @@
-body, html {
+html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  font-family: Arial, sans-serif;
 }
 
 #map {
@@ -9,48 +10,33 @@ body, html {
   width: 100%;
 }
 
-#toolbar {
-  position: absolute;
-  z-index: 999;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 6px 12px;
-  font-family: sans-serif;
-  font-size: 14px;
-  top: 10px;
-  left: 10px;
-  border-radius: 6px;
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+.label {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  border: 1px solid #888;
+  text-shadow: 0 0 2px white;
 }
 
 #backBtn {
-  margin-right: 8px;
-}
-
-.label {
-  font-size: 12px;
-  font-weight: bold;
-  color: #000;
-  text-shadow: 1px 1px 2px white;
-  pointer-events: none;
-}
-
-.label-desa,
-.label-sls {
-  display: none;
-}
-
-body.level-desa .label-desa {
-  display: block;
-}
-
-body.level-sls .label-sls {
-  display: block;
-}
-
-body.level-kecamatan .label-kecamatan {
-  display: block;
-}
-
-.leaflet-interactive {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  z-index: 1000;
+  padding: 8px 16px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: background 0.2s ease;
+}
+
+#backBtn:hover {
+  background: #c62828;
 }
