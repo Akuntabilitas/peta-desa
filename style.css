@@ -1,59 +1,71 @@
-body {
+/** style.css */
+
+body, html {
   margin: 0;
   padding: 0;
+  height: 100%;
   font-family: Arial, sans-serif;
 }
 
 #map {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
-  z-index: 1;
 }
 
-#legend {
+.legend {
   position: absolute;
   top: 10px;
   right: 10px;
-  max-height: 90vh;
-  width: 300px;
-  overflow-y: auto;
+  z-index: 1000;
   background: rgba(255, 255, 255, 0.95);
   padding: 10px;
   border-radius: 10px;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
+  max-height: 80vh;
+  overflow-y: auto;
+  width: 220px;
 }
 
-#legend button {
-  display: block;
-  width: 100%;
-  padding: 6px;
-  margin-bottom: 10px;
-  background-color: #1976d2;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
+.legend h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  text-align: center;
 }
 
-#legend button:hover {
-  background-color: #0d47a1;
-}
-
-#legend-list {
+.legend ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.legend-item {
-  padding: 6px 8px;
+.legend li {
   margin: 4px 0;
-  cursor: pointer;
+  padding: 5px 10px;
   border-radius: 5px;
-  transition: background 0.2s;
+  cursor: pointer;
+  transition: background 0.3s;
 }
 
-.legend-item:hover {
-  background-color: #e0f7fa;
+.legend li:hover,
+.legend li.active {
+  background-color: #cce5ff;
+}
+
+.label-code {
+  pointer-events: none;
+  text-align: center;
+  color: black;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px white;
+}
+
+/* Tooltip styling */
+.leaflet-tooltip {
+  background-color: white;
+  border: 1px solid #ccc;
+  color: black;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-weight: bold;
 }
