@@ -1,19 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Peta Hirarki Wilayah</title>
+  <title>Peta Interaktif Kabupaten</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div id="map"></div>
-  <div id="legend-container">
-    <button id="backBtn" hidden>Kembali</button>
-    <ul id="legend"></ul>
+  <div id="backBtn">← Kembali</div>
+  <div id="legendBox">
+    <h3 id="legendTitle">Daftar Wilayah</h3>
+    <ul id="legendList"></ul>
   </div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
