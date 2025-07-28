@@ -1,96 +1,139 @@
-const map = L.map('map').setView([-7.5, 110.7], 10);
+const map = L.map('map').setView([-7.5, 110.5], 10); // Sesuaikan pusat kabupaten
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// Global Layers & State
+let kecLayer, desaLayer, slsLayer;
+let selectedKecLayer = null;
+let selectedDesaLayer = null;
+let selectedSLSLayer = null;
+
+let currentLevel = 'kecamatan'; // ['kecamatan', 'desa', 'sls']
+
+const defaultStyle = { weight: 1, color: '#555', fillOpacity: 0.3 };
+const highlightStyle = { weight: 3, color: '#ff7800', fillOpacity: 0.5 };
+
+// UI
 const backBtn = document.getElementById('backBtn');
+const info = document.getElementById('info');
 
-let level = 'kecamatan';
-let currentLayer = null;
-let labelLayer = L.layerGroup().addTo(map);
+// Load KECAMATAN
+fetch('data/final_kec_202413309.geojson')
+  .then(res => res.json())
+  .then(data => {
+    kecLayer = L.geoJSON(data, {
+      style: defaultStyle,
+      onEachFeature: (feature, layer) => {
+        const label = feature.properties.nmkec;
+        layer.bindTooltip(label, { permanent: true, direction: 'center', className: 'label' });
 
-const urls = {
-  kecamatan: 'https://akuntabilitas.github.io/peta-desa/final_kec_202413309.geojson',
-  desa: 'https://akuntabilitas.github.io/peta-desa/final_desa_202413309.geojson',
-  sls: 'https://akuntabilitas.github.io/peta-desa/final_sls_202413309.geojson',
-};
+        layer.on('click', () => {
+          if (selectedKecLayer) selectedKecLayer.setStyle(defaultStyle);
+          selectedKecLayer = layer;
+          layer.setStyle(highlightStyle);
 
-function clearMap() {
-  if (currentLayer) map.removeLayer(currentLayer);
-  labelLayer.clearLayers();
-}
+          map.fitBounds(layer.getBounds());
 
-function goBack() {
-  if (level === 'desa') {
-    level = 'kecamatan';
-    loadGeoJSON('kecamatan');
-    backBtn.style.display = 'none';
-  } else if (level === 'sls') {
-    level = 'desa';
-    loadGeoJSON('desa', lastKecCode);
-  }
-}
+          clearLayers(['desa', 'sls']);
+          selectedDesaLayer = null;
+          selectedSLSLayer = null;
 
-let lastKecCode = null;
-let lastDesaCode = null;
+          loadDesa(feature.properties.kdkec);
+          currentLevel = 'desa';
+          backBtn.hidden = false;
+        });
+      }
+    }).addTo(map);
+  });
 
-function createLabel(feature, latlng, labelKey) {
-  return L.marker(latlng, {
-    icon: L.divIcon({
-      className: 'label-tooltip',
-      html: feature.properties[labelKey],
-    })
-  }).addTo(labelLayer);
-}
-
-function loadGeoJSON(levelToLoad, parentCode = null) {
-  clearMap();
-  fetch(urls[levelToLoad])
+// Load DESA
+function loadDesa(kdkec) {
+  fetch('data/final_desa_202413309.geojson')
     .then(res => res.json())
     .then(data => {
       const filtered = {
         ...data,
-        features: data.features.filter(f => {
-          if (levelToLoad === 'desa') return f.properties.kdkec === parentCode;
-          if (levelToLoad === 'sls') return f.properties.kddesa === parentCode;
-          return true;
-        })
+        features: data.features.filter(f => f.properties.kdkec === kdkec)
       };
 
-      currentLayer = L.geoJSON(filtered, {
-        style: {
-          color: '#3388ff',
-          weight: 1,
-          fillOpacity: 0.4
-        },
+      desaLayer = L.geoJSON(filtered, {
+        style: defaultStyle,
         onEachFeature: (feature, layer) => {
-          const props = feature.properties;
-          layer.on('click', () => {
-            if (levelToLoad === 'kecamatan') {
-              level = 'desa';
-              lastKecCode = props.kdkec;
-              loadGeoJSON('desa', props.kdkec);
-              backBtn.style.display = 'block';
-            } else if (levelToLoad === 'desa') {
-              level = 'sls';
-              lastDesaCode = props.kddesa;
-              loadGeoJSON('sls', props.kddesa);
-            }
+          layer.bindTooltip(feature.properties.nmdesa, { permanent: true, direction: 'center', className: 'label' });
+
+          layer.on('click', (e) => {
+            if (selectedDesaLayer) selectedDesaLayer.setStyle(defaultStyle);
+            selectedDesaLayer = layer;
+            layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
+
+            clearLayers(['sls']);
+            selectedSLSLayer = null;
+
+            loadSLS(feature.properties.kddesa);
+            currentLevel = 'sls';
+            e.originalEvent.stopPropagation();
           });
         }
       }).addTo(map);
-
-      map.fitBounds(currentLayer.getBounds());
-
-      filtered.features.forEach(f => {
-        const center = L.geoJSON(f).getBounds().getCenter();
-        const labelKey = levelToLoad === 'kecamatan' ? 'nmkec'
-                          : levelToLoad === 'desa' ? 'nmdesa'
-                          : 'nmsls';
-        createLabel(f, center, labelKey);
-      });
     });
 }
 
-loadGeoJSON('kecamatan');
+// Load SLS
+function loadSLS(kddesa) {
+  fetch('data/final_sls_202413309.geojson')
+    .then(res => res.json())
+    .then(data => {
+      const filtered = {
+        ...data,
+        features: data.features.filter(f => f.properties.kddesa === kddesa)
+      };
+
+      slsLayer = L.geoJSON(filtered, {
+        style: defaultStyle,
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nmsls, { permanent: true, direction: 'center', className: 'label' });
+
+          layer.on('click', (e) => {
+            if (selectedSLSLayer) selectedSLSLayer.setStyle(defaultStyle);
+            selectedSLSLayer = layer;
+            layer.setStyle(highlightStyle);
+
+            map.fitBounds(layer.getBounds());
+            e.originalEvent.stopPropagation();
+          });
+        }
+      }).addTo(map);
+    });
+}
+
+// Clear layer by level
+function clearLayers(levels) {
+  if (levels.includes('desa') && desaLayer) {
+    map.removeLayer(desaLayer);
+    desaLayer = null;
+  }
+  if (levels.includes('sls') && slsLayer) {
+    map.removeLayer(slsLayer);
+    slsLayer = null;
+  }
+}
+
+// Tombol kembali
+function goBack() {
+  if (currentLevel === 'sls') {
+    clearLayers(['sls']);
+    selectedSLSLayer = null;
+    currentLevel = 'desa';
+  } else if (currentLevel === 'desa') {
+    clearLayers(['desa', 'sls']);
+    selectedDesaLayer = null;
+    selectedKecLayer.setStyle(defaultStyle);
+    selectedKecLayer = null;
+    currentLevel = 'kecamatan';
+    backBtn.hidden = true;
+  }
+}
