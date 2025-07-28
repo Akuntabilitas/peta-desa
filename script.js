@@ -170,7 +170,19 @@ function highlightFeature(layer) {
 }
 
 function resetHighlight(layer) {
-  layer.setStyle({ weight: 1, color: '#333', fillOpacity: 0.3 });
+  let style = { weight: 1, fillOpacity: 0.3 };
+
+  if (currentLevel === 'kecamatan') {
+    style.color = '#333';
+    style.fillOpacity = 0.2;
+  } else if (currentLevel === 'desa') {
+    style.color = '#2a9d8f';
+  } else if (currentLevel === 'sls') {
+    style.color = '#e76f51';
+    style.fillOpacity = 0.4;
+  }
+
+  layer.setStyle(style);
 }
 
 document.getElementById('back-btn').addEventListener('click', () => {
