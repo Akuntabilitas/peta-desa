@@ -47,6 +47,7 @@ function showKecamatan() {
   layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
     style: { color: '#333', weight: 1, fillOpacity: 0.2 },
     onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmkec, { sticky: true });
       layer.on({
         click: () => {
           selectedKecamatan = feature.properties.kdkec;
@@ -71,6 +72,7 @@ function showDesa() {
   layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
     onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
       layer.on({
         click: () => {
           selectedDesa = feature.properties.kddesa;
@@ -97,6 +99,7 @@ function showSLS() {
   layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
     onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
       layer.on({
         click: () => {
           selectedSLS = feature.properties.kdsls;
