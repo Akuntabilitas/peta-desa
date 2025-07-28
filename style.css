@@ -25,30 +25,3 @@ body, html {
 #backBtn {
   margin-right: 8px;
 }
-
-/* Label styling */
-.label {
-  font-size: 12px;
-  font-weight: bold;
-  color: #333;
-  text-shadow: 0 0 2px white;
-  pointer-events: none;
-}
-
-/* Sembunyikan semua label */
-.label-kec, .label-desa, .label-sls {
-  display: none;
-}
-
-/* Tampilkan label sesuai level */
-body.show-kecamatan .label-kec {
-  display: block;
-}
-
-body.show-desa .label-desa {
-  display: block;
-}
-
-body.show-sls .label-sls {
-  display: block;
-}
