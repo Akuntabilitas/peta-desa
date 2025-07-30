@@ -11,29 +11,20 @@ let selectedDesa = null;
 let selectedSLS = null;
 let mode = 'wilayah';
 
-let layers = {
-  kecamatan: null,
-  desa: null,
-  sls: null
-};
-
-let geojsonData = {
-  kecamatan: null,
-  desa: null,
-  sls: null
-};
+let layers = { kecamatan: null, desa: null, sls: null };
+let geojsonData = { kecamatan: null, desa: null, sls: null };
 
 let taggingData = [];
 let taggingLayer = L.markerClusterGroup();
+let slsMarkerLayer = L.layerGroup(); // untuk titik di level SLS
 map.addLayer(taggingLayer);
 
-// cluster click → turun level
 taggingLayer.on('clusterclick', function (e) {
   const latlng = e.latlng;
-  const point = turf.point([latlng.lng, latlng.lat]);
-
   if (currentLevel === 'kecamatan') {
-    const match = geojsonData.kecamatan.features.find(f => turf.booleanPointInPolygon(point, f));
+    const match = geojsonData.kecamatan.features.find(f =>
+      turf.booleanPointInPolygon(turf.point([latlng.lng, latlng.lat]), f)
+    );
     if (match) {
       selectedKecamatan = match.properties.kdkec;
       showDesa();
@@ -41,7 +32,7 @@ taggingLayer.on('clusterclick', function (e) {
   } else if (currentLevel === 'desa') {
     const match = geojsonData.desa.features.find(f =>
       f.properties.kdkec === selectedKecamatan &&
-      turf.booleanPointInPolygon(point, f)
+      turf.booleanPointInPolygon(turf.point([latlng.lng, latlng.lat]), f)
     );
     if (match) {
       selectedDesa = match.properties.kddesa;
@@ -50,54 +41,32 @@ taggingLayer.on('clusterclick', function (e) {
   }
 });
 
+fetch('data/final_kec_202413309.geojson')
+  .then(res => res.json())
+  .then(data => geojsonData.kecamatan = data);
+
+fetch('data/final_desa_202413309.geojson')
+  .then(res => res.json())
+  .then(data => geojsonData.desa = data);
+
+fetch('data/final_sls_202413309.geojson')
+  .then(res => res.json())
+  .then(data => geojsonData.sls = data);
+
 function clearMap() {
   Object.values(layers).forEach(l => l && map.removeLayer(l));
 }
 
 function clearTagging() {
   taggingLayer.clearLayers();
+  slsMarkerLayer.clearLayers();
+  map.removeLayer(slsMarkerLayer);
 }
-
-function getCentroid(feature) {
-  const centroid = turf.centroid(feature);
-  return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0]];
-}
-
-function showClusterMarkers(features, codeKey, nameKey, radius = 3) {
-  clearTagging();
-  features.forEach(f => {
-    const center = getCentroid(f);
-    const marker = L.marker(center)
-      .bindPopup(`<b>${f.properties[nameKey]}</b>`)
-      .on('click', () => {
-        if (currentLevel === 'kecamatan') {
-          selectedKecamatan = f.properties.kdkec;
-          showDesa();
-        } else if (currentLevel === 'desa') {
-          selectedDesa = f.properties.kddesa;
-          showSLS();
-        }
-      });
-    taggingLayer.addLayer(marker);
-  });
-}
-
-Promise.all([
-  fetch('data/final_kec_202413309.geojson').then(res => res.json()),
-  fetch('data/final_desa_202413309.geojson').then(res => res.json()),
-  fetch('data/final_sls_202413309.geojson').then(res => res.json())
-]).then(([kec, desa, sls]) => {
-  geojsonData.kecamatan = kec;
-  geojsonData.desa = desa;
-  geojsonData.sls = sls;
-  showKecamatan(); // panggil hanya setelah semua data selesai dimuat
-});
 
 function showKecamatan() {
   clearMap(); clearTagging();
   currentLevel = 'kecamatan';
   updateLegend(geojsonData.kecamatan.features, 'kdkec', 'nmkec');
-
   const bounds = L.geoJSON(geojsonData.kecamatan).getBounds();
   map.fitBounds(bounds);
 
@@ -117,24 +86,20 @@ function showKecamatan() {
       }
     }).addTo(map);
 
-    if (mode === 'wilayah') {
-      showClusterMarkers(geojsonData.kecamatan.features, 'kdkec', 'nmkec', 3);
-    }
+    if (mode === 'wilayah') showTaggingForWilayah(null, null, null, 3);
   });
 }
 
 function showDesa() {
   clearMap(); clearTagging();
   currentLevel = 'desa';
-
   const filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
   updateLegend(filtered, 'kddesa', 'nmdesa');
-
-  const desaFC = { type: 'FeatureCollection', features: filtered };
-  map.fitBounds(L.geoJSON(desaFC).getBounds());
+  const bounds = L.geoJSON({ type: 'FeatureCollection', features: filtered }).getBounds();
+  map.fitBounds(bounds);
 
   map.once('moveend', () => {
-    layers.desa = L.geoJSON(desaFC, {
+    layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
       style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
@@ -149,27 +114,22 @@ function showDesa() {
       }
     }).addTo(map);
 
-    if (mode === 'wilayah') {
-      showClusterMarkers(filtered, 'kddesa', 'nmdesa', 6);
-    }
+    if (mode === 'wilayah') showTaggingForWilayah(selectedKecamatan, null, null, 6);
   });
 }
 
 function showSLS() {
   clearMap(); clearTagging();
   currentLevel = 'sls';
-
   const filtered = geojsonData.sls.features.filter(f =>
-    f.properties.kdkec === selectedKecamatan &&
-    f.properties.kddesa === selectedDesa
+    f.properties.kdkec === selectedKecamatan && f.properties.kddesa === selectedDesa
   );
   updateLegend(filtered, 'kdsls', 'nmsls');
-
-  const slsFC = { type: 'FeatureCollection', features: filtered };
-  map.fitBounds(L.geoJSON(slsFC).getBounds());
+  const bounds = L.geoJSON({ type: 'FeatureCollection', features: filtered }).getBounds();
+  map.fitBounds(bounds);
 
   map.once('moveend', () => {
-    layers.sls = L.geoJSON(slsFC, {
+    layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
       style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.nmsls, { sticky: true });
@@ -177,7 +137,6 @@ function showSLS() {
           click: () => {
             selectedSLS = feature.properties.kdsls;
             map.fitBounds(layer.getBounds());
-            showOnlyTaggingInSLS(selectedSLS);
           },
           mouseover: () => highlightFeature(layer),
           mouseout: () => resetHighlight(layer)
@@ -185,49 +144,26 @@ function showSLS() {
       }
     }).addTo(map);
 
-    // Tampilkan cluster posisi tengah masing-masing SLS
-    if (mode === 'wilayah') {
-      showClusterMarkers(filtered, 'kdsls', 'nmsls', 8);
-    }
+    if (mode === 'wilayah') showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8);
   });
-}
-
-function showOnlyTaggingInSLS(kdsls) {
-  clearTagging();
-  showTaggingFiltered(t => t.kdsls === kdsls, 6, false);
-}
-
-function showTaggingFiltered(filterFn, radius = 5, clustered = true) {
-  clearTagging();
-  const markers = [];
-
-  taggingData.filter(filterFn).forEach(t => {
-    if (!isNaN(t.lat) && !isNaN(t.lng)) {
-      const marker = L.circleMarker([t.lat, t.lng], {
-        radius,
-        color: '#ff5722',
-        fillOpacity: 0.8
-      }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`);
-      markers.push(marker);
-    }
-  });
-
-  if (clustered) {
-    markers.forEach(m => taggingLayer.addLayer(m));
-  } else {
-    L.layerGroup(markers).addTo(map);
-  }
 }
 
 function updateLegend(features, codeProp, nameProp) {
   const list = document.getElementById('legend-list');
   list.innerHTML = '';
   const sorted = [...features].sort((a, b) => a.properties[codeProp].localeCompare(b.properties[codeProp]));
-
   sorted.forEach(f => {
     const li = document.createElement('li');
     li.className = 'legend-item';
     li.innerText = `(${f.properties[codeProp]}) ${f.properties[nameProp]}`;
+    li.addEventListener('mouseover', () => {
+      const layer = findLayerByFeature(f);
+      if (layer) highlightFeature(layer);
+    });
+    li.addEventListener('mouseout', () => {
+      const layer = findLayerByFeature(f);
+      if (layer) resetHighlight(layer);
+    });
     li.addEventListener('click', () => {
       if (currentLevel === 'kecamatan') {
         selectedKecamatan = f.properties.kdkec;
@@ -238,10 +174,7 @@ function updateLegend(features, codeProp, nameProp) {
       } else if (currentLevel === 'sls') {
         selectedSLS = f.properties.kdsls;
         const layer = findLayerByFeature(f);
-        if (layer) {
-          map.fitBounds(layer.getBounds());
-          showOnlyTaggingInSLS(selectedSLS);
-        }
+        if (layer) map.fitBounds(layer.getBounds());
       }
     });
     list.appendChild(li);
@@ -249,12 +182,15 @@ function updateLegend(features, codeProp, nameProp) {
 }
 
 function findLayerByFeature(feature) {
+  const group = layers[currentLevel];
   let found = null;
-  layers[currentLevel]?.eachLayer(layer => {
-    if (JSON.stringify(layer.feature.properties) === JSON.stringify(feature.properties)) {
-      found = layer;
-    }
-  });
+  if (group && group.eachLayer) {
+    group.eachLayer(layer => {
+      if (JSON.stringify(layer.feature.properties) === JSON.stringify(feature.properties)) {
+        found = layer;
+      }
+    });
+  }
   return found;
 }
 
@@ -265,9 +201,9 @@ function highlightFeature(layer) {
 
 function resetHighlight(layer) {
   let style = { weight: 1, fillOpacity: 0.3 };
-  if (currentLevel === 'kecamatan') style.color = '#333', style.fillOpacity = 0.2;
-  else if (currentLevel === 'desa') style.color = '#2a9d8f';
-  else if (currentLevel === 'sls') style.color = '#e76f51', style.fillOpacity = 0.4;
+  if (currentLevel === 'kecamatan') style = { color: '#333', weight: 1, fillOpacity: 0.2 };
+  if (currentLevel === 'desa') style.color = '#2a9d8f';
+  if (currentLevel === 'sls') style = { color: '#e76f51', weight: 1, fillOpacity: 0.4 };
   layer.setStyle(style);
 }
 
@@ -328,15 +264,42 @@ function populatePetugasDropdown() {
   const pmlSelect = document.getElementById('pml-select');
   const pplSelect = document.getElementById('ppl-select');
 
-  pmlSet.forEach(nama => {
+  pmlSet.forEach(n => {
     const opt = document.createElement('option');
-    opt.value = opt.text = nama;
+    opt.value = opt.text = n;
     pmlSelect.appendChild(opt);
   });
 
-  pplSet.forEach(nama => {
+  pplSet.forEach(n => {
     const opt = document.createElement('option');
-    opt.value = opt.text = nama;
+    opt.value = opt.text = n;
     pplSelect.appendChild(opt);
   });
+}
+
+function showTaggingFiltered(filterFn, radius = 5) {
+  clearTagging();
+  const useCluster = currentLevel !== 'sls';
+  taggingData.filter(filterFn).forEach(t => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      const marker = L.circleMarker([t.lat, t.lng], {
+        radius,
+        color: '#ff5722',
+        fillOpacity: 0.8
+      }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`);
+      if (useCluster) taggingLayer.addLayer(marker);
+      else slsMarkerLayer.addLayer(marker);
+    }
+  });
+
+  if (!useCluster) map.addLayer(slsMarkerLayer);
+}
+
+function showTaggingForWilayah(kdkec = null, kddesa = null, kdsls = null, radius = 5) {
+  showTaggingFiltered(t =>
+    (!kdkec || t.kdkec === kdkec) &&
+    (!kddesa || t.kddesa === kddesa) &&
+    (!kdsls || t.kdsls === kdsls),
+    radius
+  );
 }
