@@ -56,89 +56,103 @@ function showKecamatan() {
   currentLevel = 'kecamatan';
   updateLegend(geojsonData.kecamatan.features, 'kdkec', 'nmkec');
 
-  layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
-    style: { color: '#333', weight: 1, fillOpacity: 0.2 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmkec, { sticky: true });
-      layer.on({
-        click: () => {
-          selectedKecamatan = feature.properties.kdkec;
-          showDesa();
-        },
-        mouseover: () => highlightFeature(layer),
-        mouseout: () => resetHighlight(layer)
-      });
+  const bounds = L.geoJSON(geojsonData.kecamatan).getBounds();
+  map.fitBounds(bounds);
+
+  map.once('moveend', () => {
+    layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
+      style: { color: '#333', weight: 1, fillOpacity: 0.2 },
+      onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.nmkec, { sticky: true });
+        layer.on({
+          click: () => {
+            selectedKecamatan = feature.properties.kdkec;
+            showDesa();
+          },
+          mouseover: () => highlightFeature(layer),
+          mouseout: () => resetHighlight(layer)
+        });
+      }
+    }).addTo(map);
+
+    if (mode === 'wilayah') {
+      showTaggingForWilayah(null, null, null, 3);
     }
-  }).addTo(map);
-
-  map.fitBounds(layers.kecamatan.getBounds());
-
-  if (mode === 'wilayah') {
-    showTaggingForWilayah(null, null, null, 3);
-  }
+  });
 }
+
 
 function showDesa() {
   clearMap();
   clearTagging();
   currentLevel = 'desa';
 
-  let filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
+  const filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
   updateLegend(filtered, 'kddesa', 'nmdesa');
 
-  layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
-    style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
-      layer.on({
-        click: () => {
-          selectedDesa = feature.properties.kddesa;
-          showSLS();
-        },
-        mouseover: () => highlightFeature(layer),
-        mouseout: () => resetHighlight(layer)
-      });
+  const desaFC = { type: 'FeatureCollection', features: filtered };
+  const bounds = L.geoJSON(desaFC).getBounds();
+  map.fitBounds(bounds);
+
+  map.once('moveend', () => {
+    layers.desa = L.geoJSON(desaFC, {
+      style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
+      onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
+        layer.on({
+          click: () => {
+            selectedDesa = feature.properties.kddesa;
+            showSLS();
+          },
+          mouseover: () => highlightFeature(layer),
+          mouseout: () => resetHighlight(layer)
+        });
+      }
+    }).addTo(map);
+
+    if (mode === 'wilayah') {
+      showTaggingForWilayah(selectedKecamatan, null, null, 6);
     }
-  }).addTo(map);
-
-  map.fitBounds(layers.desa.getBounds());
-
-  if (mode === 'wilayah') {
-    showTaggingForWilayah(selectedKecamatan, null, null, 6);
-  }
+  });
 }
+
 
 function showSLS() {
   clearMap();
   clearTagging();
   currentLevel = 'sls';
 
-  let filtered = geojsonData.sls.features.filter(f =>
+  const filtered = geojsonData.sls.features.filter(f =>
     f.properties.kdkec === selectedKecamatan && f.properties.kddesa === selectedDesa
   );
   updateLegend(filtered, 'kdsls', 'nmsls');
 
-  layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
-    style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
-      layer.on({
-        click: () => {
-          selectedSLS = feature.properties.kdsls;
-          map.fitBounds(layer.getBounds());
-        },
-        mouseover: () => highlightFeature(layer),
-        mouseout: () => resetHighlight(layer)
-      });
+  const slsFC = { type: 'FeatureCollection', features: filtered };
+  const bounds = L.geoJSON(slsFC).getBounds();
+  map.fitBounds(bounds);
+
+  map.once('moveend', () => {
+    layers.sls = L.geoJSON(slsFC, {
+      style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
+      onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.nmsls, { sticky: true });
+        layer.on({
+          click: () => {
+            selectedSLS = feature.properties.kdsls;
+            map.fitBounds(layer.getBounds());
+          },
+          mouseover: () => highlightFeature(layer),
+          mouseout: () => resetHighlight(layer)
+        });
+      }
+    }).addTo(map);
+
+    if (mode === 'wilayah') {
+      showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8);
     }
-  }).addTo(map);
-
-  map.fitBounds(layers.sls.getBounds());
-
-  if (mode === 'wilayah') {
-    showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8);
-  }
+  });
 }
+
 
 function updateLegend(features, codeProp, nameProp) {
   const list = document.getElementById('legend-list');
