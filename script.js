@@ -59,7 +59,8 @@ function showKecamatan() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.kecamatan.getBounds());
+  map.fitBounds(layers.kecamatan.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
+
 }
 
 function showDesa() {
@@ -84,7 +85,8 @@ function showDesa() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.desa.getBounds());
+  map.fitBounds(layers.desa.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
+
 }
 
 function showSLS() {
@@ -111,7 +113,8 @@ function showSLS() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.sls.getBounds());
+  map.fitBounds(layers.sls.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
+
 }
 
 function clearMap() {
