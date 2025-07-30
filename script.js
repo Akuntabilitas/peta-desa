@@ -1,5 +1,3 @@
-// script.js
-
 let map = L.map('map').setView([-7.5, 110.6], 10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -11,6 +9,7 @@ let currentLevel = 'kecamatan';
 let selectedKecamatan = null;
 let selectedDesa = null;
 let selectedSLS = null;
+let mode = 'wilayah';
 
 let layers = {
   kecamatan: null,
@@ -23,6 +22,9 @@ let geojsonData = {
   desa: null,
   sls: null
 };
+
+let taggingData = [];
+let taggingLayer = L.layerGroup().addTo(map);
 
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
@@ -39,8 +41,17 @@ fetch('data/final_sls_202413309.geojson')
   .then(res => res.json())
   .then(data => geojsonData.sls = data);
 
+function clearMap() {
+  Object.values(layers).forEach(l => l && map.removeLayer(l));
+}
+
+function clearTagging() {
+  taggingLayer.clearLayers();
+}
+
 function showKecamatan() {
   clearMap();
+  clearTagging();
   currentLevel = 'kecamatan';
   updateLegend(geojsonData.kecamatan.features, 'kdkec', 'nmkec');
 
@@ -59,12 +70,12 @@ function showKecamatan() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.kecamatan.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
-
+  map.fitBounds(layers.kecamatan.getBounds());
 }
 
 function showDesa() {
   clearMap();
+  clearTagging();
   currentLevel = 'desa';
 
   let filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
@@ -85,12 +96,16 @@ function showDesa() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.desa.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
+  map.fitBounds(layers.desa.getBounds());
 
+  if (mode === 'wilayah') {
+    showTaggingForWilayah(selectedKecamatan, selectedDesa);
+  }
 }
 
 function showSLS() {
   clearMap();
+  clearTagging();
   currentLevel = 'sls';
 
   let filtered = geojsonData.sls.features.filter(f =>
@@ -113,12 +128,11 @@ function showSLS() {
     }
   }).addTo(map);
 
-  map.fitBounds(layers.sls.getBounds(), { paddingTopLeft: [0, 0], paddingBottomRight: [350, 0] });
+  map.fitBounds(layers.sls.getBounds());
 
-}
-
-function clearMap() {
-  Object.values(layers).forEach(l => l && map.removeLayer(l));
+  if (mode === 'wilayah') {
+    showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS);
+  }
 }
 
 function updateLegend(features, codeProp, nameProp) {
@@ -177,17 +191,13 @@ function highlightFeature(layer) {
 
 function resetHighlight(layer) {
   let style = { weight: 1, fillOpacity: 0.3 };
-
   if (currentLevel === 'kecamatan') {
-    style.color = '#333';
-    style.fillOpacity = 0.2;
+    style.color = '#333'; style.fillOpacity = 0.2;
   } else if (currentLevel === 'desa') {
     style.color = '#2a9d8f';
   } else if (currentLevel === 'sls') {
-    style.color = '#e76f51';
-    style.fillOpacity = 0.4;
+    style.color = '#e76f51'; style.fillOpacity = 0.4;
   }
-
   layer.setStyle(style);
 }
 
@@ -198,3 +208,100 @@ document.getElementById('back-btn').addEventListener('click', () => {
     showKecamatan();
   }
 });
+
+document.getElementById('mode-select').addEventListener('change', e => {
+  mode = e.target.value;
+  document.getElementById('petugas-panel').style.display = mode === 'petugas' ? 'block' : 'none';
+  clearTagging();
+});
+
+document.getElementById('pml-select').addEventListener('change', e => {
+  const nama = e.target.value;
+  if (nama) showTaggingForPML(nama);
+});
+
+document.getElementById('ppl-select').addEventListener('change', e => {
+  const nama = e.target.value;
+  if (nama) showTaggingForPPL(nama);
+});
+
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pub?gid=0&single=true&output=csv';
+
+fetch(CSV_URL)
+  .then(res => res.text())
+  .then(csvText => {
+    const rows = csvText.trim().split('\n');
+    const headers = rows[0].split(',');
+    const get = key => headers.indexOf(key);
+
+    taggingData = rows.slice(1).map(row => {
+      const cols = row.split(',');
+      return {
+        lat: parseFloat(cols[get('latitude')]),
+        lng: parseFloat(cols[get('longitude')]),
+        PML: cols[get('PML')],
+        PPL: cols[get('PPL')],
+        kdkec: cols[get('kdkec')],
+        kddesa: cols[get('kddesa')],
+        kdsls: cols[get('kdsls')],
+        nama: cols[get('nama')] || cols[get('PPL')] || 'Tanpa Nama'
+      };
+    });
+
+    populatePetugasDropdown();
+  });
+
+function populatePetugasDropdown() {
+  const pmlSet = new Set();
+  const pplSet = new Set();
+  taggingData.forEach(t => {
+    if (t.PML) pmlSet.add(t.PML);
+    if (t.PPL) pplSet.add(t.PPL);
+  });
+
+  const pmlSelect = document.getElementById('pml-select');
+  const pplSelect = document.getElementById('ppl-select');
+
+  pmlSet.forEach(nama => {
+    const opt = document.createElement('option');
+    opt.value = opt.text = nama;
+    pmlSelect.appendChild(opt);
+  });
+
+  pplSet.forEach(nama => {
+    const opt = document.createElement('option');
+    opt.value = opt.text = nama;
+    pplSelect.appendChild(opt);
+  });
+}
+
+function showTaggingFiltered(filterFn) {
+  clearTagging();
+  taggingData.filter(filterFn).forEach(t => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      L.circleMarker([t.lat, t.lng], {
+        radius: 5,
+        color: '#ff5722',
+        fillOpacity: 0.8
+      })
+      .bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`)
+      .addTo(taggingLayer);
+    }
+  });
+}
+
+function showTaggingForWilayah(kdkec, kddesa, kdsls) {
+  showTaggingFiltered(t =>
+    t.kdkec === kdkec &&
+    (kddesa ? t.kddesa === kddesa : true) &&
+    (kdsls ? t.kdsls === kdsls : true)
+  );
+}
+
+function showTaggingForPML(nama) {
+  showTaggingFiltered(t => t.PML === nama);
+}
+
+function showTaggingForPPL(nama) {
+  showTaggingFiltered(t => t.PPL === nama);
+}
