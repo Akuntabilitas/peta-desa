@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Peta Interaktif</title>
+  <title>Peta Interaktif Tagging</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,6 +12,20 @@
 
   <div id="legend">
     <button id="back-btn">← Kembali</button>
+
+    <select id="mode-select">
+      <option value="wilayah">Tampil Berdasarkan Wilayah</option>
+      <option value="petugas">Tampil Berdasarkan Petugas</option>
+    </select>
+
+    <div id="petugas-panel" style="display: none;">
+      <label for="pml-select">PML:</label>
+      <select id="pml-select"><option value="">Pilih PML</option></select>
+
+      <label for="ppl-select">PPL:</label>
+      <select id="ppl-select"><option value="">Pilih PPL</option></select>
+    </div>
+
     <ul id="legend-list"></ul>
   </div>
 
