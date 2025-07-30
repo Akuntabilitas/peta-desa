@@ -82,6 +82,17 @@ function showClusterMarkers(features, codeKey, nameKey, radius = 3) {
   });
 }
 
+Promise.all([
+  fetch('data/final_kec_202413309.geojson').then(res => res.json()),
+  fetch('data/final_desa_202413309.geojson').then(res => res.json()),
+  fetch('data/final_sls_202413309.geojson').then(res => res.json())
+]).then(([kec, desa, sls]) => {
+  geojsonData.kecamatan = kec;
+  geojsonData.desa = desa;
+  geojsonData.sls = sls;
+  showKecamatan(); // panggil hanya setelah semua data selesai dimuat
+});
+
 function showKecamatan() {
   clearMap(); clearTagging();
   currentLevel = 'kecamatan';
