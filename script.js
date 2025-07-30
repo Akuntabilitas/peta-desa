@@ -227,29 +227,37 @@ document.getElementById('ppl-select').addEventListener('change', e => {
 
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pub?gid=0&single=true&output=csv';
 
-fetch(CSV_URL)
-  .then(res => res.text())
-  .then(csvText => {
-    const rows = csvText.trim().split('\n');
-    const headers = rows[0].split(',');
-    const get = key => headers.indexOf(key);
-
-    taggingData = rows.slice(1).map(row => {
-      const cols = row.split(',');
-      return {
-        lat: parseFloat(cols[get('latitude')]),
-        lng: parseFloat(cols[get('longitude')]),
-        PML: cols[get('PML')],
-        PPL: cols[get('PPL')],
-        kdkec: cols[get('kdkec')],
-        kddesa: cols[get('kddesa')],
-        kdsls: cols[get('kdsls')],
-        nama: cols[get('nama')] || cols[get('PPL')] || 'Tanpa Nama'
-      };
-    });
+Papa.parse(CSV_URL, {
+  download: true,
+  header: true,
+  complete: results => {
+    taggingData = results.data.map(t => ({
+      lat: parseFloat(t.latitude),
+      lng: parseFloat(t.longitude),
+      nama: t.nama || t.nm_project || 'Tanpa Nama',
+      PML: t.PML,
+      PPL: t.PPL,
+      kdkec: t.kdkec,
+      kddesa: t.kddesa,
+      kdsls: t.kdsls
+    }));
 
     populatePetugasDropdown();
-  });
+  }
+});
+
+document.getElementById('pml-select').addEventListener('change', e => {
+  const nama = e.target.value;
+  console.log("PILIH PML:", nama);
+  if (nama) showTaggingForPML(nama);
+});
+
+document.getElementById('ppl-select').addEventListener('change', e => {
+  const nama = e.target.value;
+  console.log("PILIH PPL:", nama);
+  if (nama) showTaggingForPPL(nama);
+});
+
 
 function populatePetugasDropdown() {
   const pmlSet = new Set();
