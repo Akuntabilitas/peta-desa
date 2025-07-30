@@ -26,6 +26,30 @@ let geojsonData = {
 let taggingData = [];
 let taggingLayer = L.markerClusterGroup();
 map.addLayer(taggingLayer);
+taggingLayer.on('clusterclick', function (e) {
+  const latlng = e.latlng;
+
+  if (currentLevel === 'kecamatan') {
+    const match = geojsonData.kecamatan.features.find(f => {
+      return turf.booleanPointInPolygon(turf.point([latlng.lng, latlng.lat]), f);
+    });
+    if (match) {
+      selectedKecamatan = match.properties.kdkec;
+      showDesa();
+    }
+  } else if (currentLevel === 'desa') {
+    const match = geojsonData.desa.features.find(f =>
+      f.properties.kdkec === selectedKecamatan &&
+      turf.booleanPointInPolygon(turf.point([latlng.lng, latlng.lat]), f)
+    );
+    if (match) {
+      selectedDesa = match.properties.kddesa;
+      showSLS();
+    }
+  }
+
+  // Untuk level SLS, tidak perlu melakukan apa-apa
+});
 
 // Load GeoJSON
 fetch('data/final_kec_202413309.geojson')
