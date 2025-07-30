@@ -90,10 +90,15 @@ function showDesa() {
   const filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
   updateLegend(filtered, 'kddesa', 'nmdesa');
 
+  // Buat layer sementara untuk ambil bounds
   const desaFC = { type: 'FeatureCollection', features: filtered };
-  const bounds = L.geoJSON(desaFC).getBounds();
+  const tempLayer = L.geoJSON(desaFC);
+  const bounds = tempLayer.getBounds();
+
+  // Zoom dulu ke area
   map.fitBounds(bounds);
 
+  // Setelah zoom selesai, tambahkan layer ke peta
   map.once('moveend', () => {
     layers.desa = L.geoJSON(desaFC, {
       style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
@@ -115,6 +120,7 @@ function showDesa() {
     }
   });
 }
+
 
 
 function showSLS() {
