@@ -26,6 +26,7 @@ let geojsonData = {
 let taggingData = [];
 let taggingLayer = L.layerGroup().addTo(map);
 
+// Load GeoJSON
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
   .then(data => {
@@ -71,6 +72,10 @@ function showKecamatan() {
   }).addTo(map);
 
   map.fitBounds(layers.kecamatan.getBounds());
+
+  if (mode === 'wilayah') {
+    showTaggingForWilayah(null, null, null, 3);
+  }
 }
 
 function showDesa() {
@@ -99,7 +104,7 @@ function showDesa() {
   map.fitBounds(layers.desa.getBounds());
 
   if (mode === 'wilayah') {
-    showTaggingForWilayah(selectedKecamatan, selectedDesa);
+    showTaggingForWilayah(selectedKecamatan, null, null, 6);
   }
 }
 
@@ -131,7 +136,7 @@ function showSLS() {
   map.fitBounds(layers.sls.getBounds());
 
   if (mode === 'wilayah') {
-    showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS);
+    showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8);
   }
 }
 
@@ -213,16 +218,21 @@ document.getElementById('mode-select').addEventListener('change', e => {
   mode = e.target.value;
   document.getElementById('petugas-panel').style.display = mode === 'petugas' ? 'block' : 'none';
   clearTagging();
+  if (mode === 'wilayah') {
+    if (currentLevel === 'kecamatan') showKecamatan();
+    else if (currentLevel === 'desa') showDesa();
+    else if (currentLevel === 'sls') showSLS();
+  }
 });
 
 document.getElementById('pml-select').addEventListener('change', e => {
   const nama = e.target.value;
-  if (nama) showTaggingForPML(nama);
+  if (nama) showTaggingFiltered(t => t.PML === nama, 5);
 });
 
 document.getElementById('ppl-select').addEventListener('change', e => {
   const nama = e.target.value;
-  if (nama) showTaggingForPPL(nama);
+  if (nama) showTaggingFiltered(t => t.PPL === nama, 5);
 });
 
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pub?gid=0&single=true&output=csv';
@@ -241,23 +251,9 @@ Papa.parse(CSV_URL, {
       kddesa: t.kddesa,
       kdsls: t.kdsls
     }));
-
     populatePetugasDropdown();
   }
 });
-
-document.getElementById('pml-select').addEventListener('change', e => {
-  const nama = e.target.value;
-  console.log("PILIH PML:", nama);
-  if (nama) showTaggingForPML(nama);
-});
-
-document.getElementById('ppl-select').addEventListener('change', e => {
-  const nama = e.target.value;
-  console.log("PILIH PPL:", nama);
-  if (nama) showTaggingForPPL(nama);
-});
-
 
 function populatePetugasDropdown() {
   const pmlSet = new Set();
@@ -283,12 +279,12 @@ function populatePetugasDropdown() {
   });
 }
 
-function showTaggingFiltered(filterFn) {
+function showTaggingFiltered(filterFn, radius = 5) {
   clearTagging();
   taggingData.filter(filterFn).forEach(t => {
     if (!isNaN(t.lat) && !isNaN(t.lng)) {
       L.circleMarker([t.lat, t.lng], {
-        radius: 5,
+        radius: radius,
         color: '#ff5722',
         fillOpacity: 0.8
       })
@@ -298,18 +294,11 @@ function showTaggingFiltered(filterFn) {
   });
 }
 
-function showTaggingForWilayah(kdkec, kddesa, kdsls) {
+function showTaggingForWilayah(kdkec = null, kddesa = null, kdsls = null, radius = 5) {
   showTaggingFiltered(t =>
-    t.kdkec === kdkec &&
-    (kddesa ? t.kddesa === kddesa : true) &&
-    (kdsls ? t.kdsls === kdsls : true)
+    (!kdkec || t.kdkec === kdkec) &&
+    (!kddesa || t.kddesa === kddesa) &&
+    (!kdsls || t.kdsls === kdsls),
+    radius
   );
-}
-
-function showTaggingForPML(nama) {
-  showTaggingFiltered(t => t.PML === nama);
-}
-
-function showTaggingForPPL(nama) {
-  showTaggingFiltered(t => t.PPL === nama);
 }
