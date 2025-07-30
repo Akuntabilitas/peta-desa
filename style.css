@@ -64,3 +64,13 @@ body {
 .legend-item:hover {
   background-color: #e0f7fa;
 }
+
+.marker-cluster-small {
+  background-color: rgba(255, 152, 0, 0.6);
+}
+.marker-cluster-medium {
+  background-color: rgba(255, 87, 34, 0.7);
+}
+.marker-cluster-large {
+  background-color: rgba(244, 67, 54, 0.8);
+}
