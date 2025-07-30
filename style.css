@@ -40,6 +40,13 @@ body {
   background-color: #0d47a1;
 }
 
+#legend select {
+  width: 100%;
+  padding: 5px;
+  margin-bottom: 6px;
+  border-radius: 5px;
+}
+
 #legend-list {
   list-style: none;
   padding: 0;
@@ -56,11 +63,4 @@ body {
 
 .legend-item:hover {
   background-color: #e0f7fa;
-}
-
-#legend select {
-  width: 100%;
-  padding: 5px;
-  margin-bottom: 6px;
-  border-radius: 5px;
 }
