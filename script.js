@@ -27,14 +27,10 @@ let taggingData = [];
 let taggingLayer = L.markerClusterGroup();
 map.addLayer(taggingLayer);
 
-
 // Load GeoJSON
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
-  .then(data => {
-    geojsonData.kecamatan = data;
-    showKecamatan();
-  });
+  .then(data => geojsonData.kecamatan = data);
 
 fetch('data/final_desa_202413309.geojson')
   .then(res => res.json())
@@ -83,7 +79,6 @@ function showKecamatan() {
   });
 }
 
-
 function showDesa() {
   clearMap();
   clearTagging();
@@ -92,15 +87,12 @@ function showDesa() {
   const filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
   updateLegend(filtered, 'kddesa', 'nmdesa');
 
-  // Buat layer sementara untuk ambil bounds
   const desaFC = { type: 'FeatureCollection', features: filtered };
   const tempLayer = L.geoJSON(desaFC);
   const bounds = tempLayer.getBounds();
 
-  // Zoom dulu ke area
   map.fitBounds(bounds);
 
-  // Setelah zoom selesai, tambahkan layer ke peta
   map.once('moveend', () => {
     layers.desa = L.geoJSON(desaFC, {
       style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
@@ -122,8 +114,6 @@ function showDesa() {
     }
   });
 }
-
-
 
 function showSLS() {
   clearMap();
@@ -160,7 +150,6 @@ function showSLS() {
     }
   });
 }
-
 
 function updateLegend(features, codeProp, nameProp) {
   const list = document.getElementById('legend-list');
@@ -274,6 +263,7 @@ Papa.parse(CSV_URL, {
       kdsls: t.kdsls
     }));
     populatePetugasDropdown();
+    showKecamatan(); // ← panggil setelah data tagging siap
   }
 });
 
@@ -310,7 +300,6 @@ function showTaggingFiltered(filterFn, radius = 5) {
         color: '#ff5722',
         fillOpacity: 0.8
       }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`);
-
       taggingLayer.addLayer(marker);
     }
   });
