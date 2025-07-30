@@ -1,3 +1,5 @@
+// script.js
+
 let map = L.map('map').setView([-7.5, 110.6], 10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -22,8 +24,6 @@ let geojsonData = {
   sls: null
 };
 
-let labelLayers = []; // <- untuk menyimpan label kode di tengah
-
 fetch('data/final_kec_202413309.geojson')
   .then(res => res.json())
   .then(data => {
@@ -47,9 +47,7 @@ function showKecamatan() {
   layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
     style: { color: '#333', weight: 1, fillOpacity: 0.2 },
     onEachFeature: (feature, layer) => {
-      const code = feature.properties.kdkec; // atau kddesa / kdsls
-  layer.bindTooltip(feature.properties.nmkec, { sticky: true }); // label hover
-  addLabelToPolygon(layer, code); // label di tengah poligon
+      layer.bindTooltip(feature.properties.nmkec, { sticky: true });
       layer.on({
         click: () => {
           selectedKecamatan = feature.properties.kdkec;
@@ -58,8 +56,6 @@ function showKecamatan() {
         mouseover: () => highlightFeature(layer),
         mouseout: () => resetHighlight(layer)
       });
-
-      addCenterLabel(feature, feature.properties.kdkec);
     }
   }).addTo(map);
 
@@ -76,9 +72,7 @@ function showDesa() {
   layers.desa = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#2a9d8f', weight: 1, fillOpacity: 0.3 },
     onEachFeature: (feature, layer) => {
-      const code = feature.properties.kddesa; // atau kddesa / kdsls
-  layer.bindTooltip(feature.properties.nmdesa, { sticky: true }); // label hover
-  addLabelToPolygon(layer, code); // label di tengah poligon
+      layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
       layer.on({
         click: () => {
           selectedDesa = feature.properties.kddesa;
@@ -87,8 +81,6 @@ function showDesa() {
         mouseover: () => highlightFeature(layer),
         mouseout: () => resetHighlight(layer)
       });
-
-      addCenterLabel(feature, feature.properties.kddesa);
     }
   }).addTo(map);
 
@@ -107,9 +99,7 @@ function showSLS() {
   layers.sls = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
     style: { color: '#e76f51', weight: 1, fillOpacity: 0.4 },
     onEachFeature: (feature, layer) => {
-      const code = feature.properties.kdsls; // atau kddesa / kdsls
-  layer.bindTooltip(feature.properties.nmsls, { sticky: true }); // label hover
-  addLabelToPolygon(layer, code); // label di tengah poligon
+      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
       layer.on({
         click: () => {
           selectedSLS = feature.properties.kdsls;
@@ -118,8 +108,6 @@ function showSLS() {
         mouseover: () => highlightFeature(layer),
         mouseout: () => resetHighlight(layer)
       });
-
-      addCenterLabel(feature, feature.properties.kdsls);
     }
   }).addTo(map);
 
@@ -128,8 +116,6 @@ function showSLS() {
 
 function clearMap() {
   Object.values(layers).forEach(l => l && map.removeLayer(l));
-  labelLayers.forEach(l => map.removeLayer(l)); // hapus semua label teks
-  labelLayers = [];
 }
 
 function updateLegend(features, codeProp, nameProp) {
@@ -200,74 +186,6 @@ function resetHighlight(layer) {
   }
 
   layer.setStyle(style);
-}
-
-// Fungsi untuk menampilkan label kode wilayah di tengah poligon
-function addCenterLabel(feature, text) {
-  const center = getPolygonCenter(feature.geometry);
-  if (!center) return;
-
-  const area = turf.area(feature); // butuh turf.js
-  let fontSize = 14;
-  if (area < 100000) fontSize = 10;
-  if (area < 30000) fontSize = 8;
-  if (area < 10000) fontSize = 6;
-  if (area < 3000) fontSize = 0; // terlalu kecil, jangan tampilkan
-
-  if (fontSize > 0) {
-    const label = L.marker(center, {
-      icon: L.divIcon({
-        className: 'label-text',
-        html: `<div style="font-size:${fontSize}px;font-weight:bold;color:#000;text-shadow: 1px 1px 2px #fff;">${text}</div>`,
-        iconSize: [100, 20],
-        iconAnchor: [50, 10]
-      }),
-      interactive: false
-    }).addTo(map);
-    labelLayers.push(label);
-  }
-}
-
-// Hitung titik tengah dari Polygon atau MultiPolygon
-function getPolygonCenter(geometry) {
-  try {
-    const center = turf.center(geometry).geometry.coordinates;
-    return [center[1], center[0]]; // [lat, lng]
-  } catch (e) {
-    return null;
-  }
-}
-function addLabelToPolygon(layer, text) {
-  let center;
-
-  try {
-    center = layer.getCenter();
-  } catch (e) {
-    // Fallback ke rata-rata koordinat
-    const latlngs = layer.getLatLngs()[0];
-    let latSum = 0, lngSum = 0;
-    latlngs.forEach(latlng => {
-      latSum += latlng.lat;
-      lngSum += latlng.lng;
-    });
-    center = L.latLng(latSum / latlngs.length, lngSum / latlngs.length);
-  }
-
-  // Tentukan ukuran font berdasarkan zoom
-  const fontSize = Math.max(10, Math.min(16, map.getZoom() * 1.2));
-
-  const divIcon = L.divIcon({
-    className: 'label-code',
-    html: `<div style="font-size:${fontSize}px">${text}</div>`,
-    iconSize: null
-  });
-
-  const marker = L.marker(center, {
-    icon: divIcon,
-    interactive: false
-  });
-
-  marker.addTo(map);
 }
 
 document.getElementById('back-btn').addEventListener('click', () => {
