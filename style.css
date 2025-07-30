@@ -57,3 +57,10 @@ body {
 .legend-item:hover {
   background-color: #e0f7fa;
 }
+
+#legend select {
+  width: 100%;
+  padding: 5px;
+  margin-bottom: 6px;
+  border-radius: 5px;
+}
