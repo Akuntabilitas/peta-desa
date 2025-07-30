@@ -24,7 +24,9 @@ let geojsonData = {
 };
 
 let taggingData = [];
-let taggingLayer = L.layerGroup().addTo(map);
+let taggingLayer = L.markerClusterGroup();
+map.addLayer(taggingLayer);
+
 
 // Load GeoJSON
 fetch('data/final_kec_202413309.geojson')
@@ -303,13 +305,13 @@ function showTaggingFiltered(filterFn, radius = 5) {
   clearTagging();
   taggingData.filter(filterFn).forEach(t => {
     if (!isNaN(t.lat) && !isNaN(t.lng)) {
-      L.circleMarker([t.lat, t.lng], {
+      const marker = L.circleMarker([t.lat, t.lng], {
         radius: radius,
         color: '#ff5722',
         fillOpacity: 0.8
-      })
-      .bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`)
-      .addTo(taggingLayer);
+      }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`);
+
+      taggingLayer.addLayer(marker);
     }
   });
 }
