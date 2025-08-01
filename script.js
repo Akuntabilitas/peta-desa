@@ -395,7 +395,13 @@ const manualCluster = L.marker(center, {
     className: '',
     iconSize : [80, 10] // sesuaikan jika perlu
   })
+  
 });
+
+manualCluster.bindTooltip(
+  `<div>${namaWilayah}</div>Batas SLS: ${jumlahBatasSLS}<br>Batas Segmen: ${jumlahBatasSegmen}<br>Wilayah Konsentrasi: ${jumlahEkonomi}`,
+  { direction: 'top', permanent: false, className: 'cluster-tooltip' }
+);
 
 
 
