@@ -11,6 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 </head>
 <body>
+  
   <div id="map"></div>
 
   <div id="legend">
@@ -31,6 +32,48 @@
 
     <ul id="legend-list"></ul>
   </div>
+<div id="kategori-toggle-container">
+  <span class="toggle-label">Pilih Kategori:</span>
+  <label class="switch">
+    <input type="checkbox" id="toggle-kategori" />
+    <span class="slider round"></span>
+  </label>
+  <span id="label-kategori">Batas Wilkerstat</span>
+</div>
+
+
+<style>
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+.switch input { display: none; }
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 24px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px; width: 18px;
+  left: 3px; bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: #2196F3;
+}
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+</style>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
