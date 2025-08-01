@@ -92,9 +92,75 @@ body {
   text-align: center;
   font-size: 12px;
   font-weight: bold;
-  line-height: 30px;
+  line-height: 24px;
   width: 30px;
   height: 30px;
   border: 2px solid #fff;
   box-shadow: 0 0 5px rgba(0,0,0,0.4);
+}
+
+.custom-cluster-icon {
+  position: relative;
+  text-align: center;
+}
+
+.custom-cluster-icon .cluster-manual {
+  width: 24px;
+  height: 24px;
+  background-color: #1976d2;
+  color: #fff;
+  border-radius: 50%;
+  line-height: 24px;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 0 4px rgba(0,0,0,0.3);
+  margin: 0 auto;
+}
+
+.custom-cluster-label {
+  position: absolute;
+  top: 26px;
+  width: max-content;
+  max-width: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  color: #333;
+  font-size: 11px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.cluster-wrapper {
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.cluster-manual {
+  background: #1976d2;
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 24px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  margin: 0 auto;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+}
+
+.cluster-label {
+  font-size: 11px;
+  margin-top: 2px;
+  background: rgba(255,255,255,0.8);
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
