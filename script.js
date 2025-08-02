@@ -55,29 +55,80 @@ let slsLayer = L.geoJSON(null, {
 
 map.addLayer(slsMarkerLayer);
 // Ambil data GeoJSON
-fetch('data/final_kec_202413309.geojson').then(res => res.json()).then(data => geojsonData.kecamatan = data);
-fetch('data/final_desa_202413309.geojson').then(res => res.json()).then(data => geojsonData.desa = data);
-fetch('data/final_sls_202413309.geojson')
-  .then(res => res.json())
-  .then(data => {
-    geojsonData.sls = data;
-
-    // Bangun indeks untuk getSLSLayerByCode
-    layers.sls = L.geoJSON(geojsonData.sls);
-    layers.sls.eachLayer(layer => {
-      const prop = layer.feature?.properties;
-      if (prop?.kdkec && prop?.kddesa && prop?.kdsls) {
-        slsIndex.push({
-          kode: {
-            kdkec: prop.kdkec,
-            kddesa: prop.kddesa,
-            kdsls: prop.kdsls
-          },
-          layer: layer
-        });
+// Membuat atau membuka database IndexedDB
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('GeoJSONDB', 1);
+    
+    request.onupgradeneeded = event => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('geojson')) {
+        db.createObjectStore('geojson');
       }
-    });
+    };
+    
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
+}
+
+// Simpan data ke IndexedDB
+async function saveToIndexedDB(key, data) {
+  const db = await openDB();
+  const tx = db.transaction('geojson', 'readwrite');
+  tx.objectStore('geojson').put(data, key);
+  return tx.complete;
+}
+
+// Ambil data dari IndexedDB
+async function loadFromIndexedDB(key) {
+  const db = await openDB();
+  const tx = db.transaction('geojson', 'readonly');
+  const request = tx.objectStore('geojson').get(key);
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// Fetch atau ambil dari cache
+async function fetchGeoJSONWithCache(key, url) {
+  const cachedData = await loadFromIndexedDB(key);
+  if (cachedData) {
+    console.log(`Loaded ${key} from IndexedDB`);
+    return cachedData;
+  } else {
+    const res = await fetch(url);
+    const data = await res.json();
+    await saveToIndexedDB(key, data);
+    console.log(`Fetched and saved ${key}`);
+    return data;
+  }
+}
+
+// Penggunaan:
+(async () => {
+  geojsonData.kecamatan = await fetchGeoJSONWithCache('kecamatan', 'data/final_kec_202413309.geojson');
+  geojsonData.desa = await fetchGeoJSONWithCache('desa', 'data/final_desa_202413309.geojson');
+  
+  geojsonData.sls = await fetchGeoJSONWithCache('sls', 'data/final_sls_202413309.geojson');
+
+  layers.sls = L.geoJSON(geojsonData.sls);
+  layers.sls.eachLayer(layer => {
+    const prop = layer.feature?.properties;
+    if (prop?.kdkec && prop?.kddesa && prop?.kdsls) {
+      slsIndex.push({
+        kode: {
+          kdkec: prop.kdkec,
+          kddesa: prop.kddesa,
+          kdsls: prop.kdsls
+        },
+        layer: layer
+      });
+    }
+  });
+})();
+
 
 
 // Ambil data tagging
