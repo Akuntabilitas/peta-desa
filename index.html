@@ -9,7 +9,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 </head>
 <body>
   
@@ -36,6 +37,14 @@
     <button id="close-popup">Tutup</button>
   </div>
 </div>
+<div id="kategori-toggle-container">
+  <span class="toggle-label">Pilih Kategori:</span>
+  <label class="switch">
+    <input type="checkbox" id="toggle-kategori" />
+    <span class="slider round"></span>
+  </label>
+  <span id="label-kategori">Batas Wilkerstat</span>
+</div>
   <div id="legend">
     <select id="mode-select">
       <option value="wilayah">Tampil Berdasarkan Wilayah</option>
@@ -61,14 +70,7 @@
     <button id="back-btn">🔙 Kembali</button>
 
   </div>
-<div id="kategori-toggle-container">
-  <span class="toggle-label">Pilih Kategori:</span>
-  <label class="switch">
-    <input type="checkbox" id="toggle-kategori" />
-    <span class="slider round"></span>
-  </label>
-  <span id="label-kategori">Batas Wilkerstat</span>
-</div>
+
 
 <style>
 .switch {
