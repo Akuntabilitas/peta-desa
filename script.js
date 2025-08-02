@@ -272,7 +272,7 @@ function showKecamatan() {
 
   map.fitBounds(layers.kecamatan.getBounds(), {
     paddingTopLeft: [0, 0],
-    paddingBottomRight: [300, 0]
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
   });
 
   if (kategoriMode === 'wilkerstat') {
@@ -306,7 +306,7 @@ function showDesa() {
 
   map.fitBounds(layers.desa.getBounds(), {
     paddingTopLeft: [0, 0],
-    paddingBottomRight: [300, 0]
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
   });
   if (kategoriMode === 'wilkerstat') {
   showTaggingForWilayah(selectedKecamatan, null, null, 6, true); // hanya batas
@@ -337,7 +337,7 @@ function showSLS() {
           selectedSLS = feature.properties.kdsls;
           slsZoomed = true;
           map.fitBounds(layer.getBounds(), {
-            paddingBottomRight: [300, 0]
+            paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
           });
           showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS, 6, false);
         setNav('sls', {
@@ -356,7 +356,7 @@ function showSLS() {
 
   map.fitBounds(layers.sls.getBounds(), {
     paddingTopLeft: [0, 0],
-    paddingBottomRight: [300, 0]
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
   });
   if (kategoriMode === 'wilkerstat') {
   showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8, true); // hanya batas
@@ -671,31 +671,15 @@ function updateLegend(features, codeProp, nameProp) {
       li.className = 'legend-item';
       li.textContent = `(${f.properties[codeProp]}) ${f.properties[nameProp]}`;
 
-      if (currentLevel === 'sls') {
-        // Highlight on hover
-        li.addEventListener('mouseenter', () => {
-          const layer = findLayerByFeature(f);
-          if (layer) {
-            layer.setStyle({
-              color: '#ff6600',
-              weight: 3,
-              fillOpacity: 0.4
-            });
-            layer.bringToFront();
-          }
-        });
+            li.addEventListener('mouseenter', () => {
+        const layer = findLayerByFeature(f);
+        if (layer) highlightFeature(layer);
+      });
 
-        li.addEventListener('mouseleave', () => {
-          const layer = findLayerByFeature(f);
-          if (layer) {
-            layer.setStyle({
-              color: '#555',
-              weight: 1,
-              fillOpacity: 0.2
-            });
-          }
-        });
-      }
+      li.addEventListener('mouseleave', () => {
+        const layer = findLayerByFeature(f);
+        if (layer) resetHighlight(layer);
+      });
 
       li.addEventListener('click', () => {
         if (currentLevel === 'kecamatan') {
@@ -1123,7 +1107,7 @@ function showSLSForPetugas(filteredTagging) {
   // Zoom ke area gabungan
   if (filteredSLS.features.length > 0) {
     const bounds = L.geoJSON(filteredSLS).getBounds();
-    map.fitBounds(bounds, { paddingBottomRight: [300, 0] });
+    map.fitBounds(bounds, { paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0] });
   }
 }
 
