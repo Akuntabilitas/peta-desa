@@ -451,6 +451,7 @@ if (Object.keys(slsIndex).length === 0 && layers.sls && layers.sls.eachLayer) {
   (!kdkec || t.kdkec === kdkec) &&
   (!kddesa || t.kddesa === kddesa) &&
   (!kdsls || t.kdsls === kdsls)
+  
 ).forEach(t => {
   if (!isNaN(t.lat) && !isNaN(t.lng)) {
     const jenis = ikonLandmark[t.tipe_landmark] || { icon: '❓', color: '#999' };
@@ -630,6 +631,14 @@ if (matchedLayer) {
   if (!bounds.isValid()) return;
   center = bounds.getCenter();
 }
+const taggingFiltered = taggingData.filter(t =>
+  (!kdkec || t.kdkec === kdkec) &&
+  (!kddesa || t.kddesa === kddesa) &&
+  (!kdsls || t.kdsls === kdsls)
+);
+
+const landmarkCounts = countLandmarks(taggingFiltered);
+updateLandmarkCountDisplay(landmarkCounts);
 
 function isKonsentrasiEkonomi(tipe) {
   const list = [
@@ -1213,3 +1222,50 @@ const selectedSLSHighlightLayer = L.geoJSON(null, {
     fillOpacity: 0.1
   }
 }).addTo(map);
+
+function countLandmarks(taggingList) {
+  const counts = {};
+
+  taggingList.forEach(t => {
+    const jenis = t.tipe_landmark?.trim() || 'Lainnya';
+    counts[jenis] = (counts[jenis] || 0) + 1;
+  });
+
+  return counts;
+}
+
+function updateLandmarkCountDisplay(counts) {
+  const container = document.getElementById('landmark-info');
+  if (!container) return;
+
+  const batasWilkerstatList = ['Batas SLS', 'Batas Segmen'];
+
+  const buildList = (list) => {
+    return list.map(jenis => {
+      if (!counts[jenis]) return '';
+      const icon = ikonLandmark[jenis]?.icon || '❓';
+      const color = ikonLandmark[jenis]?.color || '#999';
+      const jumlah = counts[jenis];
+      return `<li><span class="landmark-icon" style="color:${color}">${icon}</span> ${jenis}: ${jumlah}</li>`;
+    }).join('');
+  };
+
+  // Buat bagian Batas Wilkerstat
+  let batasHTML = buildList(batasWilkerstatList);
+  batasHTML = batasHTML ? `
+    <div class="landmark-group">
+      <div class="landmark-category">Batas Wilkerstat</div>
+      <ul>${batasHTML}</ul>
+    </div>` : '';
+
+  // Buat bagian Wilayah Konsentrasi Ekonomi (sisanya)
+  const ekonomiList = Object.keys(counts).filter(jenis => !batasWilkerstatList.includes(jenis));
+  let ekonomiHTML = buildList(ekonomiList);
+  ekonomiHTML = ekonomiHTML ? `
+    <div class="landmark-group">
+      <div class="landmark-category">Wilayah Konsentrasi Ekonomi</div>
+      <ul>${ekonomiHTML}</ul>
+    </div>` : '';
+
+  container.innerHTML = `<h4>Jumlah Landmark</h4>${batasHTML}${ekonomiHTML}`;
+}
