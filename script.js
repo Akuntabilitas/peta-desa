@@ -13,6 +13,7 @@ let selectedDesa = null;
 let selectedSLS = null;
 let mode = 'wilayah';
 let slsZoomed = false;
+let selectedSLSLayer = null;
 
 let layers = { kecamatan: null, desa: null, sls: null };
 let geojsonData = { kecamatan: null, desa: null, sls: null };
@@ -301,7 +302,7 @@ const ikonLandmark = {
   'Stasiun': { icon: '🚆', color: '#f44336' }
 };
 function showKecamatan() {
-  clearMap(); clearTagging();
+  clearMap(); clearTagging(); selectedSLSHighlightLayer.clearLayers();
   currentLevel = 'kecamatan';
   updateLegend(geojsonData.kecamatan.features, 'kdkec', 'nmkec');
 
@@ -334,7 +335,7 @@ function showKecamatan() {
 setNav(); // default semua wilayah
 }
 function showDesa() {
-  clearMap(); clearTagging();
+  clearMap(); clearTagging(); selectedSLSHighlightLayer.clearLayers();
   currentLevel = 'desa';
   const filtered = geojsonData.desa.features.filter(f => f.properties.kdkec === selectedKecamatan);
   updateLegend(filtered, 'kddesa', 'nmdesa');
@@ -370,7 +371,7 @@ setNav('kecamatan', {
 }
 
 function showSLS() {
-  clearMap(); clearTagging();
+  clearMap(); clearTagging(); selectedSLSHighlightLayer.clearLayers();
   currentLevel = 'sls';
   const filtered = geojsonData.sls.features.filter(f =>
     f.properties.kdkec === selectedKecamatan &&
@@ -384,18 +385,25 @@ function showSLS() {
       layer.bindTooltip(feature.properties.nmsls, { sticky: true });
       layer.on({
         click: () => {
-          
-          selectedSLS = feature.properties.kdsls;
-          slsZoomed = true;
-          map.fitBounds(layer.getBounds(), {
-            paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
-          });
-          showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS, 6, false);
-        setNav('sls', {
-  nmkec: getNamaKecamatan(selectedKecamatan),
-  nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
-  nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS)
-});
+  selectedSLS = feature.properties.kdsls;
+  slsZoomed = true;
+
+selectedSLSHighlightLayer.clearLayers(); // Hapus highlight sebelumnya
+
+if (feature?.geometry) {
+  selectedSLSHighlightLayer.addData(feature);
+}
+  map.fitBounds(layer.getBounds(), {
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0]
+  });
+
+  showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS, 6, false);
+
+  setNav('sls', {
+    nmkec: getNamaKecamatan(selectedKecamatan),
+    nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+    nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS)
+  });
 
         },
         mouseover: () => highlightFeature(layer),
@@ -446,20 +454,35 @@ if (Object.keys(slsIndex).length === 0 && layers.sls && layers.sls.eachLayer) {
 ).forEach(t => {
   if (!isNaN(t.lat) && !isNaN(t.lng)) {
     const jenis = ikonLandmark[t.tipe_landmark] || { icon: '❓', color: '#999' };
-
+      const extraStyle = t.isNyasar
+  ? `
+    border: 2px solid gold;
+    background-color: rgba(255, 255, 100, 0.8);
+    border-radius: 50%;
+    font-weight: bold;
+  `
+  : '';
     const icon = L.divIcon({
-      html: `
-        <div style="
-          font-size: 18px;
-          text-align: center;
-          line-height: 1;
-          color: ${jenis.color};
-        ">${jenis.icon}</div>
-      `,
-      className: 'tipe-landmark-icon',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
+  html: `
+    <div style="
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: ${t.isNyasar ? '#000' : jenis.color};
+      background-color: ${t.isNyasar ? 'rgba(255, 255, 100, 0.8)' : 'transparent'};
+      border: ${t.isNyasar ? '2px solid gold' : 'none'};
+      border-radius: 50%;
+      font-weight: bold;
+    ">${jenis.icon}</div>
+  `,
+  className: 'tipe-landmark-icon',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14] // center bottom
+});
+
 
     const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
       `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
@@ -468,6 +491,7 @@ if (Object.keys(slsIndex).length === 0 && layers.sls && layers.sls.eachLayer) {
     marker.bindTooltip(t.nama || 'Tanpa Nama', {
       permanent: true,
       direction: 'bottom',
+      offset: [0, 14],
       className: 'tagging-label'
     });
 
@@ -526,7 +550,12 @@ if (slsLayerGroup) {
 }
 
 // === [2] Tandai isNyasar untuk tiap titik tagging ===
+
 taggingData.forEach(t => {
+  if (t.tipe_landmark !== 'Batas SLS') {
+    t.isNyasar = false; // bukan titik yang perlu dicek nyasar
+    return;
+  }
   if (!t.lat || !t.lng || !t.kdkec || !t.kddesa || !t.kdsls) return;
 
   const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
@@ -656,6 +685,11 @@ manualCluster.bindTooltip(
 
 
     manualCluster.on('click', () => {
+      selectedSLSHighlightLayer.clearLayers(); // Hapus highlight sebelumnya
+
+if (matchedLayer?.feature?.geometry) {
+  selectedSLSHighlightLayer.addData(matchedLayer.feature);
+}
   if (currentLevel === 'kecamatan') {
     selectedKecamatan = kode;
     selectedDesa = null;       // reset desa
@@ -1171,3 +1205,11 @@ function getPolygonCenter(geometry) {
   }
   return null;
 }
+
+const selectedSLSHighlightLayer = L.geoJSON(null, {
+  style: {
+    color: 'gold',
+    weight: 3,
+    fillOpacity: 0.1
+  }
+}).addTo(map);
