@@ -271,6 +271,21 @@ input:checked + .slider:before {
   color: #ffffff; /* Biru untuk Batas Segmen */
 }
 
+.nyasar-label {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: bold;
+  border: 0px solid #ccc;
+  color: #000;
+  background-color: white;
+}
+
+.nyasar-label.has-nyasar {
+  background-color: #ffeb3b; /* kuning terang */
+  border-color: #fbc02d;
+}
 .konsentrasi-count {
   color: #ffffff; /* Hijau untuk Konsentrasi Ekonomi */
 }
