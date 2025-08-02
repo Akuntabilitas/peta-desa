@@ -556,7 +556,7 @@ input:checked + .slider:before {
     position: static;
     margin-top: 10px;
     transform: none;
-    width: 100%;
+    width: 80%;
     justify-content: center;
     flex-wrap: wrap;
     padding: 8px 10px;
