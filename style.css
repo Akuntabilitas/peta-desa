@@ -541,7 +541,7 @@ input:checked + .slider:before {
   }
 
   #map {
-    height: 75vh;
+    width: 100%;
   }
 
   #simple-nav {
