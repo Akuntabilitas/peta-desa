@@ -2,8 +2,6 @@ body {
   margin: 0;
   padding: 0;
   font-family: Arial, sans-serif;
-  overflow-x: hidden;
-}
 }
 
 #map {
@@ -531,7 +529,6 @@ input:checked + .slider:before {
     width: 100%;
     max-height: none;
     overflow-y: visible;
-  overflow-x: hidden;
     padding: 10px;
     margin: 0;
     border-radius: 0;
@@ -541,9 +538,11 @@ input:checked + .slider:before {
   }
 
   #map {
-    width: 100%;
+    height: 70vh;
   }
-
+body {
+  overflow-x: hidden;
+}
   #simple-nav {
     position: static;
     width: 100%;
@@ -556,7 +555,7 @@ input:checked + .slider:before {
     position: static;
     margin-top: 10px;
     transform: none;
-    width: 80%;
+    width: 100%;
     justify-content: center;
     flex-wrap: wrap;
     padding: 8px 10px;
