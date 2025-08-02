@@ -523,3 +523,55 @@ input:checked + .slider:before {
   text-align: center;
 }
 
+@media (max-width: 768px) {
+  #legend {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow-y: visible;
+    padding: 10px;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: white;
+    z-index: 1001;
+  }
+
+  #map {
+    height: 70vh;
+  }
+
+  #simple-nav {
+    position: static;
+    width: 100%;
+    text-align: center;
+    padding: 8px;
+    box-shadow: none;
+  }
+
+  #kategori-toggle-container {
+    position: static;
+    margin-top: 10px;
+    transform: none;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  #btn-export-nyasar {
+    position: fixed;
+    left: 60%;
+    right: 12px;
+    bottom: 12px;
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+
+  #popup-export {
+    width: calc(100% - 24px);
+    left: 12px;
+    bottom: 70px;
+  }
+}
