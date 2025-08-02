@@ -1,4 +1,6 @@
+showSpinner();
 let map = L.map('map').setView([-7.5, 110.6], 10);
+map.zoomControl.setPosition('bottomleft');
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
   attribution: 'Tiles © Esri'
 }).addTo(map);
@@ -45,7 +47,6 @@ function getSLSLayerByCode(kdkec, kddesa, kdsls) {
 }
 
 map.addLayer(slsMarkerLayer);
-
 // Ambil data GeoJSON
 fetch('data/final_kec_202413309.geojson').then(res => res.json()).then(data => geojsonData.kecamatan = data);
 fetch('data/final_desa_202413309.geojson').then(res => res.json()).then(data => geojsonData.desa = data);
@@ -127,6 +128,7 @@ taggingData.forEach(t => {
 
     populatePetugasDropdown();
     showKecamatan();
+    hideSpinner();
   }
 });
 
@@ -271,6 +273,7 @@ function showKecamatan() {
 } else {
   showKonsentrasiIcons(null, null, null); // ikon langsung
 }
+setNav(); // default semua wilayah
 }
 function showDesa() {
   clearMap(); clearTagging();
@@ -303,6 +306,9 @@ function showDesa() {
 } else {
   showKonsentrasiIcons(selectedKecamatan, null, null); // ikon langsung
 }
+setNav('kecamatan', {
+    nmkec: getNamaKecamatan(selectedKecamatan)
+  });
 }
 
 function showSLS() {
@@ -320,16 +326,24 @@ function showSLS() {
       layer.bindTooltip(feature.properties.nmsls, { sticky: true });
       layer.on({
         click: () => {
+          
           selectedSLS = feature.properties.kdsls;
           slsZoomed = true;
           map.fitBounds(layer.getBounds(), {
             paddingBottomRight: [300, 0]
           });
           showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS, 6, false);
+        setNav('sls', {
+  nmkec: getNamaKecamatan(selectedKecamatan),
+  nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+  nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS)
+});
+
         },
         mouseover: () => highlightFeature(layer),
         mouseout: () => resetHighlight(layer)
       });
+    
     }
   }).addTo(map);
 
@@ -342,6 +356,11 @@ function showSLS() {
 } else {
   showKonsentrasiIcons(selectedKecamatan, selectedDesa, null); // ikon langsung
 }
+setNav('desa', {
+  nmkec: getNamaKecamatan(selectedKecamatan),
+  nmdesa: getNamaDesa(selectedKecamatan, selectedDesa)
+});
+
 }
 
 function showTaggingForWilayah(kdkec = null, kddesa = null, kdsls = null, radius = 5, useCluster = true) {
@@ -468,11 +487,12 @@ taggingData.forEach(t => {
         polygon = turf.multiPolygon(geom.coordinates);
       }
 
-      if (polygon) {
-        const nearest = turf.nearestPointOnLine(turf.polygonToLine(polygon), turfPoint);
-        const dist = turf.distance(turfPoint, nearest, { units: 'meters' });
-        isNyasar = dist > 20;  // === Jarak titik nyasar ===
-      }
+  if (polygon) {
+  const nearest = turf.nearestPointOnLine(turf.polygonToLine(polygon), turfPoint);
+  const dist = turf.distance(turfPoint, nearest, { units: 'meters' });
+  t.jarakKeBatas = dist;
+  isNyasar = dist > 20;
+}
     }
   } catch (err) {
     console.warn("Gagal memproses polygon SLS untuk nyasar:", err);
@@ -561,7 +581,7 @@ const manualCluster = L.marker(center, {
         <span class="konsentrasi-count">${jumlahEkonomi}</span>
       </div>
       ${nyasarLabelHTML}
-      <div class="cluster-label">${namaWilayah}</div>
+      <div class="cluster-label"><b>${namaWilayah}</b></div>
     `,
     className: '',
     iconSize: [100, 40]
@@ -722,3 +742,180 @@ function showTaggingFiltered(filterFn, radius = 5) {
   });
   map.addLayer(slsMarkerLayer);
 }
+
+function setNav(level, data = {}) {
+  const nav = document.getElementById("simple-nav");
+
+  const semua = `<span onclick="showKecamatan()">KAB BOYOLALI</span>`;
+  const kec = `<span onclick="showDesa()">${data.nmkec || 'Kecamatan'}</span>`;
+  const desa = `<span onclick="showSLS()">${data.nmdesa || 'Desa'}</span>`;
+  const sls = `SLS ${data.nmsls || data.kdsls || ''}`; // hanya teks, tidak bisa diklik
+
+  if (level === 'kecamatan') {
+    nav.innerHTML = `${semua} › ${data.nmkec}`;
+  } else if (level === 'desa') {
+    nav.innerHTML = `${semua} › ${kec} › ${data.nmdesa}`;
+  } else if (level === 'sls') {
+    nav.innerHTML = `${semua} › ${kec} › ${desa} › ${sls}`;
+  } else {
+    nav.innerHTML = semua;
+  }
+}
+
+
+
+function getNamaKecamatan(kdkec) {
+  const f = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
+  return f ? f.properties.nmkec : '';
+}
+
+function getNamaKecamatan(kdkec) {
+  const kec = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
+  return kec ? kec.properties.nmkec : '';
+}
+
+function getNamaDesa(kdkec, kddesa) {
+  const desa = geojsonData.desa.features.find(f =>
+    f.properties.kdkec === kdkec && f.properties.kddesa === kddesa
+  );
+  return desa ? desa.properties.nmdesa : '';
+}
+
+function getNamaSLS(kdkec, kddesa, kdsls) {
+  const sls = geojsonData.sls.features.find(f =>
+    f.properties.kdkec === kdkec &&
+    f.properties.kddesa === kddesa &&
+    f.properties.kdsls === kdsls
+  );
+  return sls ? sls.properties.nmsls : '';
+}
+
+function showSpinner() {
+  document.getElementById('loading-spinner').classList.remove('hidden');
+}
+
+function hideSpinner() {
+  document.getElementById('loading-spinner').classList.add('hidden');
+}
+
+function exportTitikNyasar() {
+  const nyasar = taggingData.filter(t => t.isNyasar && t.lat && t.lng);
+
+  if (nyasar.length === 0) {
+    alert("Tidak ada titik nyasar yang ditemukan.");
+    return;
+  }
+
+  const headers = [
+    "kdkec", "nmkec", "kddesa","nmdesa", "kdsls","nmsls", "PML","PPL", "jarak_meter"
+  ];
+
+  const rows = nyasar.map(t => [
+    t.kdkec,
+    getNamaKecamatan(t.kdkec),
+    t.kddesa,
+    getNamaDesa(t.kdkec, t.kddesa),
+    t.kdsls,
+    getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
+    t.PML,
+    t.PPL,
+    t.jarakKeBatas || ''
+  ]);
+
+  const csvContent = "data:text/csv;charset=utf-8," +
+    [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "titik nyasar.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+const btnExport = document.getElementById("btn-export-nyasar");
+const popupExport = document.getElementById("popup-export");
+const closePopup = document.getElementById("close-popup");
+
+btnExport.addEventListener("click", () => {
+  popupExport.classList.toggle("show");
+  populateKecamatanDropdown();
+  populateDesaDropdown();
+});
+
+closePopup.addEventListener("click", () => {
+  popupExport.classList.remove("show");
+});
+
+// Populate Kecamatan Dropdown
+function populateKecamatanDropdown() {
+  const select = document.getElementById("filter-kec");
+  select.innerHTML = `<option value="">Semua Kecamatan</option>`;
+  geojsonData.kecamatan.features.forEach(f => {
+    const opt = document.createElement("option");
+    opt.value = f.properties.kdkec;
+    opt.textContent = f.properties.nmkec;
+    select.appendChild(opt);
+  });
+}
+
+// Populate Desa Dropdown
+function populateDesaDropdown(selectedKec = "") {
+  const select = document.getElementById("filter-desa");
+  select.innerHTML = `<option value="">Semua Desa</option>`;
+  geojsonData.desa.features
+    .filter(f => !selectedKec || f.properties.kdkec === selectedKec)
+    .forEach(f => {
+      const opt = document.createElement("option");
+      opt.value = f.properties.kddesa;
+      opt.textContent = f.properties.nmdesa;
+      select.appendChild(opt);
+    });
+}
+
+// Update Desa saat Kecamatan dipilih
+document.getElementById("filter-kec").addEventListener("change", function () {
+  const selectedKec = this.value;
+  populateDesaDropdown(selectedKec);
+});
+
+// Download file
+document.getElementById("download-filtered").addEventListener("click", () => {
+  const selectedKec = document.getElementById("filter-kec").value;
+  const selectedDesa = document.getElementById("filter-desa").value;
+
+  const filtered = taggingData.filter(t => {
+    if (!t.isNyasar) return false;
+    if (selectedKec && t.kdkec !== selectedKec) return false;
+    if (selectedDesa && t.kddesa !== selectedDesa) return false;
+    return true;
+  });
+
+  // Export to CSV
+  let csv = "kdkec,kddesa,kdsls,nmkec,nmdesa,nmsls,lat,lng\n";
+  filtered.forEach(t => {
+    csv += [
+      t.kdkec,
+      t.kddesa,
+      t.kdsls,
+      getNamaKecamatan(t.kdkec),
+      getNamaDesa(t.kdkec, t.kddesa),
+      getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
+      t.lat,
+      t.lng
+    ].join(",") + "\n";
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "tagging-nyasar.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  popupExport.classList.remove("show");
+});
+
