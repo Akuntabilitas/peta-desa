@@ -13,7 +13,28 @@
 <body>
   
   <div id="map"></div>
+<div id="simple-nav" class="nav-breadcrumb"></div>
+<div id="loading-spinner" class="spinner hidden"></div>
 
+<button id="btn-export-nyasar">💾 Download Titik Nyasar</button>
+
+<div id="popup-export" class="popup-hidden">
+  <div class="popup-content">
+    <h3>Ekspor Titik Nyasar</h3>
+    <label for="filter-kec">Pilih Kecamatan:</label>
+    <select id="filter-kec">
+      <option value="">Semua Kecamatan</option>
+    </select>
+
+    <label for="filter-desa">Pilih Desa:</label>
+    <select id="filter-desa">
+      <option value="">Semua Desa</option>
+    </select>
+
+    <button id="download-filtered">Download</button>
+    <button id="close-popup">Tutup</button>
+  </div>
+</div>
   <div id="legend">
     <button id="back-btn">← Kembali</button>
 
@@ -40,8 +61,6 @@
   </label>
   <span id="label-kategori">Batas Wilkerstat</span>
 </div>
-
-
 
 <style>
 .switch {
