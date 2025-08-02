@@ -45,6 +45,13 @@ function getSLSLayerByCode(kdkec, kddesa, kdsls) {
     p.kode.kdsls === kdsls
   )?.layer || null;
 }
+let slsLayer = L.geoJSON(null, {
+  style: {
+    color: '#e76f51',
+    weight: 2,
+    fillOpacity: 0
+  }
+});
 
 map.addLayer(slsMarkerLayer);
 // Ambil data GeoJSON
@@ -126,7 +133,7 @@ taggingData.forEach(t => {
 });
 
 
-    populatePetugasDropdown();
+    populatePetugasDatalist();
     showKecamatan();
     hideSpinner();
   }
@@ -657,16 +664,46 @@ function findLayerByFeature(feature) {
 function updateLegend(features, codeProp, nameProp) {
   const list = document.getElementById('legend-list');
   list.innerHTML = '';
+  
   features.sort((a, b) => a.properties[codeProp].localeCompare(b.properties[codeProp]))
     .forEach(f => {
       const li = document.createElement('li');
       li.className = 'legend-item';
       li.textContent = `(${f.properties[codeProp]}) ${f.properties[nameProp]}`;
+
+      if (currentLevel === 'sls') {
+        // Highlight on hover
+        li.addEventListener('mouseenter', () => {
+          const layer = findLayerByFeature(f);
+          if (layer) {
+            layer.setStyle({
+              color: '#ff6600',
+              weight: 3,
+              fillOpacity: 0.4
+            });
+            layer.bringToFront();
+          }
+        });
+
+        li.addEventListener('mouseleave', () => {
+          const layer = findLayerByFeature(f);
+          if (layer) {
+            layer.setStyle({
+              color: '#555',
+              weight: 1,
+              fillOpacity: 0.2
+            });
+          }
+        });
+      }
+
       li.addEventListener('click', () => {
         if (currentLevel === 'kecamatan') {
-          selectedKecamatan = f.properties.kdkec; showDesa();
+          selectedKecamatan = f.properties.kdkec;
+          showDesa();
         } else if (currentLevel === 'desa') {
-          selectedDesa = f.properties.kddesa; showSLS();
+          selectedDesa = f.properties.kddesa;
+          showSLS();
         } else if (currentLevel === 'sls') {
           selectedSLS = f.properties.kdsls;
           const layer = findLayerByFeature(f);
@@ -676,9 +713,11 @@ function updateLegend(features, codeProp, nameProp) {
           }
         }
       });
+
       list.appendChild(li);
     });
 }
+
 
 document.getElementById('back-btn').addEventListener('click', () => {
   if (currentLevel === 'sls') {
@@ -699,49 +738,97 @@ document.getElementById('back-btn').addEventListener('click', () => {
 document.getElementById('mode-select').addEventListener('change', e => {
   mode = e.target.value;
   document.getElementById('petugas-panel').style.display = mode === 'petugas' ? 'block' : 'none';
+  document.getElementById('back-btn').style.display = mode === 'petugas' ? 'none' : 'block';
+  document.getElementById('legend-list').style.display = mode === 'petugas' ? 'none' : 'block';
+  clearMap();
   clearTagging();
+  clearPML();
   if (mode === 'wilayah') {
     if (currentLevel === 'kecamatan') showKecamatan();
     else if (currentLevel === 'desa') showDesa();
     else if (currentLevel === 'sls') showSLS();
   }
+  if (mode === 'petugas') {showKecamatan();
+  clearTagging();}
 });
 
-function populatePetugasDropdown() {
-  const pmlSet = new Set(), pplSet = new Set();
+function populatePetugasDatalist() {
+  const pmlSet = new Set();
+  const pplSet = new Set();
+
   taggingData.forEach(t => {
     if (t.PML) pmlSet.add(t.PML);
     if (t.PPL) pplSet.add(t.PPL);
   });
-  const pmlSelect = document.getElementById('pml-select');
-  const pplSelect = document.getElementById('ppl-select');
-  pmlSet.forEach(n => pmlSelect.append(new Option(n, n)));
-  pplSet.forEach(n => pplSelect.append(new Option(n, n)));
+
+  const pmlList = document.getElementById('pml-list');
+  const pplList = document.getElementById('ppl-list');
+
+  pmlList.innerHTML = '';
+  pplList.innerHTML = '';
+
+  [...pmlSet].sort().forEach(pml => {
+    const opt = document.createElement('option');
+    opt.value = pml;
+    pmlList.appendChild(opt);
+  });
+
+  [...pplSet].sort().forEach(ppl => {
+    const opt = document.createElement('option');
+    opt.value = ppl;
+    pplList.appendChild(opt);
+  });
 }
 
-document.getElementById('pml-select').addEventListener('change', e => {
-  const nama = e.target.value;
-  if (nama) showTaggingFiltered(t => t.PML === nama, 5);
-});
-document.getElementById('ppl-select').addEventListener('change', e => {
-  const nama = e.target.value;
-  if (nama) showTaggingFiltered(t => t.PPL === nama, 5);
-});
 
 function showTaggingFiltered(filterFn, radius = 5) {
   clearTagging();
-  taggingData.filter(filterFn).forEach(t => {
+
+  const filtered = taggingData.filter(filterFn);
+
+  filtered.forEach(t => {
     if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      // Marker titik tagging
       const marker = L.circleMarker([t.lat, t.lng], {
         radius,
         color: '#ff5722',
         fillOpacity: 0.8
-      }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}`);
+      }).bindPopup(`<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Kode SLS: ${t.kdsls}`);
       slsMarkerLayer.addLayer(marker);
+
+      // Label kode SLS (tampil di atas marker)
+      const label = L.marker([t.lat, t.lng], {
+        icon: L.divIcon({
+          className: 'tagging-label',
+          html: t.kdsls,
+          iconSize: [30, 15],
+          iconAnchor: [30, 30]
+        }),
+        interactive: false // agar tidak mengganggu klik marker
+      });
+      slsMarkerLayer.addLayer(label);
     }
   });
+
   map.addLayer(slsMarkerLayer);
+
+  // Tampilkan poligon SLS terfilter
+  showSLSForPetugas(filtered);
+
+  // Zoom ke wilayah tagging hasil filter
+  const latlngs = [];
+  filtered.forEach(t => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      latlngs.push([t.lat, t.lng]);
+    }
+  });
+
+  if (latlngs.length > 0) {
+    const bounds = L.latLngBounds(latlngs);
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }
 }
+
 
 function setNav(level, data = {}) {
   const nav = document.getElementById("simple-nav");
@@ -798,41 +885,6 @@ function hideSpinner() {
   document.getElementById('loading-spinner').classList.add('hidden');
 }
 
-function exportTitikNyasar() {
-  const nyasar = taggingData.filter(t => t.isNyasar && t.lat && t.lng);
-
-  if (nyasar.length === 0) {
-    alert("Tidak ada titik nyasar yang ditemukan.");
-    return;
-  }
-
-  const headers = [
-    "kdkec", "nmkec", "kddesa","nmdesa", "kdsls","nmsls", "PML","PPL", "jarak_meter"
-  ];
-
-  const rows = nyasar.map(t => [
-    t.kdkec,
-    getNamaKecamatan(t.kdkec),
-    t.kddesa,
-    getNamaDesa(t.kdkec, t.kddesa),
-    t.kdsls,
-    getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
-    t.PML,
-    t.PPL,
-    t.jarakKeBatas || ''
-  ]);
-
-  const csvContent = "data:text/csv;charset=utf-8," +
-    [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "titik nyasar.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
 
 const btnExport = document.getElementById("btn-export-nyasar");
 const popupExport = document.getElementById("popup-export");
@@ -892,30 +944,195 @@ document.getElementById("download-filtered").addEventListener("click", () => {
     return true;
   });
 
-  // Export to CSV
-  let csv = "kdkec,kddesa,kdsls,nmkec,nmdesa,nmsls,lat,lng\n";
-  filtered.forEach(t => {
-    csv += [
-      t.kdkec,
-      t.kddesa,
-      t.kdsls,
-      getNamaKecamatan(t.kdkec),
-      getNamaDesa(t.kdkec, t.kddesa),
-      getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
-      t.lat,
-      t.lng
-    ].join(",") + "\n";
-  });
+  // Export to Excel
+  // Buat worksheet manual agar bisa set tipe cell
+const header = [
+  "kdkec", "nmkec",
+  "kddesa", "nmdesa",
+  "kdsls", "nmsls",
+  "PML", "PPL", "Jarak"
+];
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", "tagging-nyasar.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+const data = filtered.map(t => [
+  t.kdkec,
+  getNamaKecamatan(t.kdkec),
+  t.kddesa,
+  getNamaDesa(t.kdkec, t.kddesa),
+  t.kdsls,
+  getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
+  t.PML || '',
+  t.PPL || '',
+  t.jarakKeBatas || ''
+]);
+
+const aoa = [header, ...data];
+const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+// Format kolom tertentu sebagai text (agar 00 tetap muncul tanpa tanda kutip)
+["A", "C", "E"].forEach(col => {
+  for (let r = 2; r <= aoa.length; r++) {
+    const cell = worksheet[`${col}${r}`];
+    if (cell) cell.z = '@'; // Format text
+  }
+});
+
+const workbook = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(workbook, worksheet, "Tagging Nyasar");
+XLSX.writeFile(workbook, "tagging-nyasar.xlsx");
 
   popupExport.classList.remove("show");
 });
 
+// Setelah semua elemen HTML sudah pasti ada
+document.addEventListener('DOMContentLoaded', () => {
+  populatePetugasDatalist(); // Pastikan ini dipanggil saat awal
+  // Event listener pencarian
+  document.getElementById('pml-input').addEventListener('input', () => {
+    const pml = document.getElementById('pml-input').value.trim();
+    const ppl = document.getElementById('ppl-input').value.trim();
+
+    showTaggingFiltered(t => {
+      return (!pml || t.PML === pml) && (!ppl || t.PPL === ppl);
+
+    });
+  });
+
+  document.getElementById('ppl-input').addEventListener('input', () => {
+    const pml = document.getElementById('pml-input').value.trim();
+    const ppl = document.getElementById('ppl-input').value.trim();
+
+    showTaggingFiltered(t => {
+      return (!pml || t.PML === pml) && (!ppl || t.PPL === ppl);
+    });
+  });
+});
+
+const pmlInput = document.getElementById('pml-input');
+const pplInput = document.getElementById('ppl-input');
+const pplList = document.getElementById('ppl-list');
+const pmlList = document.getElementById('pml-list');
+
+// Inisialisasi PML list
+const uniquePMLs = [...new Set(taggingData.map(t => t.PML))].filter(Boolean).sort();
+pmlList.innerHTML = uniquePMLs.map(pml => `<option value="${pml}">`).join("");
+
+// Saat PML diketik atau dipilih
+pmlInput.addEventListener('input', () => {
+  const selectedPML = pmlInput.value.trim();
+  const filteredPPLs = [...new Set(
+    taggingData.filter(t => t.PML === selectedPML).map(t => t.PPL)
+  )].filter(Boolean).sort();
+
+  pplList.innerHTML = filteredPPLs.map(ppl => `<option value="${ppl}">`).join("");
+
+  // Tampilkan titik tagging sesuai input PML + PPL
+  const selectedPPL = pplInput.value.trim();
+  showTaggingFiltered(t =>
+    (!selectedPML || t.PML === selectedPML) &&
+    (!selectedPPL || t.PPL === selectedPPL)
+  );
+});
+
+// Saat PPL diketik
+pplInput.addEventListener('input', () => {
+  const selectedPML = pmlInput.value.trim();
+  const selectedPPL = pplInput.value.trim();
+  showTaggingFiltered(t =>
+    (!selectedPML || t.PML === selectedPML) &&
+    (!selectedPPL || t.PPL === selectedPPL)
+  );
+});
+
+function clearPML() {
+  document.getElementById('pml-input').value = '';
+  document.getElementById('ppl-input').value = '';
+  
+  const pplList = document.getElementById('ppl-list');
+  if (pplList) {
+    pplList.innerHTML = '';
+  }
+    slsLayer.clearLayers();
+showKecamatan();
+  clearTagging();
+ 
+
+}
+
+function clearPPL() {
+  document.getElementById('ppl-input').value = '';
+  const pml = document.getElementById('pml-input').value.trim();
+
+  showTaggingFiltered(t => {
+    return !pml || t.PML === pml;
+  });
+
+  // Tidak perlu panggil clearTagging lagi
+}
+
+
+function showSLSForPetugas(filteredTagging) {
+  clearMap();
+  if (!geojsonData) return;
+
+  const selectedCodes = new Set(
+    filteredTagging.map(t => `${t.kdkec}-${t.kddesa}-${t.kdsls}`)
+  );
+
+  const filteredSLS = {
+    type: "FeatureCollection",
+    features: geojsonData.sls.features.filter(f => {
+      const p = f.properties;
+      const key = `${p.kdkec}-${p.kddesa}-${p.kdsls}`;
+      return selectedCodes.has(key);
+    })
+  };
+
+  slsLayer.clearLayers();
+
+  // Tambahkan poligon dengan tooltip kode SLS
+  L.geoJSON(filteredSLS, {
+    style: {
+      color: '#e76f51',
+      weight: 2,
+      fillOpacity: 0.1
+    },
+    onEachFeature: (feature, layer) => {
+      const kodeSLS = feature.properties.kdsls;
+      layer.bindTooltip(kodeSLS, { permanent: true, direction: 'center', className: 'sls-label' });
+    }
+  }).addTo(slsLayer);
+
+  // Tambahkan teks marker di tengah poligon
+  filteredSLS.features.forEach(f => {
+    const center = getPolygonCenter(f.geometry);
+    if (center) {
+      const kode = f.properties.kdsls;
+      const label = L.marker(center, {
+        icon: L.divIcon({
+          className: 'sls-label',
+          html: kode,
+          iconSize: [30, 20]
+        })
+      });
+      slsLayer.addLayer(label);
+    }
+  });
+
+  slsLayer.addTo(map);
+
+  // Zoom ke area gabungan
+  if (filteredSLS.features.length > 0) {
+    const bounds = L.geoJSON(filteredSLS).getBounds();
+    map.fitBounds(bounds, { paddingBottomRight: [300, 0] });
+  }
+}
+
+function getPolygonCenter(geometry) {
+  const coords = geometry.coordinates;
+  if (geometry.type === 'Polygon') {
+    return L.polygon(coords).getBounds().getCenter();
+  } else if (geometry.type === 'MultiPolygon') {
+    return L.polygon(coords[0]).getBounds().getCenter(); // Ambil polygon pertama
+  }
+  return null;
+}
