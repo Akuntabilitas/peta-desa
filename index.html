@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  
 </head>
 <body>
   
@@ -36,22 +37,29 @@
   </div>
 </div>
   <div id="legend">
-    <button id="back-btn">← Kembali</button>
-
     <select id="mode-select">
       <option value="wilayah">Tampil Berdasarkan Wilayah</option>
       <option value="petugas">Tampil Berdasarkan Petugas</option>
     </select>
 
     <div id="petugas-panel" style="display: none;">
-      <label for="pml-select">PML:</label>
-      <select id="pml-select"><option value="">Pilih PML</option></select>
+<div class="input-with-clear">
+  <input id="pml-input" list="pml-list" placeholder="Cari PML" />
+  <span class="clear-btn" onclick="clearPML()">&times;</span>
+</div>
+<datalist id="pml-list"></datalist>
 
-      <label for="ppl-select">PPL:</label>
-      <select id="ppl-select"><option value="">Pilih PPL</option></select>
+<div class="input-with-clear">
+  <input id="ppl-input" list="ppl-list" placeholder="Cari PPL" />
+  <span class="clear-btn" onclick="clearPPL()">&times;</span>
+</div>
+<datalist id="ppl-list"></datalist>
+
     </div>
 
     <ul id="legend-list"></ul>
+    <button id="back-btn">🔙 Kembali</button>
+
   </div>
 <div id="kategori-toggle-container">
   <span class="toggle-label">Pilih Kategori:</span>
@@ -98,6 +106,7 @@ input:checked + .slider:before {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
