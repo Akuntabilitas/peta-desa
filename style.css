@@ -531,6 +531,7 @@ input:checked + .slider:before {
     width: 100%;
     max-height: none;
     overflow-y: visible;
+  overflow-x: hidden;
     padding: 10px;
     margin: 0;
     border-radius: 0;
