@@ -539,8 +539,9 @@ input:checked + .slider:before {
 
   #map {
     height: 70vh;
+    width: 100vw;
   }
-body {
+html, body {
   overflow-x: hidden;
 }
   #simple-nav {
@@ -555,7 +556,7 @@ body {
     position: static;
     margin-top: 10px;
     transform: none;
-    width: 100%;
+    width: 90vw;
     justify-content: center;
     flex-wrap: wrap;
     padding: 8px 10px;
@@ -564,9 +565,9 @@ body {
 
   #btn-export-nyasar {
     position: fixed;
-    left: 60%;
+    left: 60vw;
     right: 12px;
-    bottom: 12px;
+    bottom: 5vw;
     font-size: 13px;
     padding: 6px 10px;
   }
