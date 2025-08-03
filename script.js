@@ -711,6 +711,11 @@ if (matchedLayer?.feature?.geometry) {
   } else if (currentLevel === 'sls') {
     selectedSLS = kode;
     slsZoomed = true;
+      setNav('sls', {
+    nmkec: getNamaKecamatan(selectedKecamatan),
+    nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+    nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS)
+  });
     showTaggingForWilayah(selectedKecamatan, selectedDesa, selectedSLS, 6, false);
 
 
