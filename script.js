@@ -233,7 +233,14 @@ document.getElementById('toggle-kategori').addEventListener('change', e => {
 
 function showKonsentrasiIcons(kdkec = null, kddesa = null, kdsls = null) {
   clearTagging();
+const taggingFiltered = taggingData.filter(t =>
+  (!kdkec || t.kdkec === kdkec) &&
+  (!kddesa || t.kddesa === kddesa) &&
+  (!kdsls || t.kdsls === kdsls)
+);
 
+const landmarkCounts = countLandmarks(taggingFiltered);
+updateLandmarkCountDisplay(landmarkCounts);
   const kategori = [
     'Mall', 'Pertokoan', 'Pasar',
     'Gedung Perkantoran', 'Kawasan Industri/Sentra Industri',
