@@ -28,6 +28,8 @@ body {
 
 
 #legend {
+  flex-direction: column; /* susun vertikal */
+  justify-content: space-between; /* spasi antara atas dan bawah */
   background: rgba(255, 255, 255, 0.85);
   border-radius: 10px;
   padding: 10px 12px;
@@ -537,11 +539,13 @@ input:checked + .slider:before {
     height: 70vh;
     width: 100vw;
   }
-html, body {
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-}
+
+  html, body {
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
   #simple-nav {
     position: static;
     width: 100%;
@@ -576,6 +580,7 @@ html, body {
     bottom: 70px;
   }
 }
+
 
 .landmark-panel {
   background-color: rgba(255, 255, 255, 0.7);
@@ -656,4 +661,68 @@ html, body {
   width: 20px;
   text-align: center;
   margin-right: 4px;
+}
+
+#legend {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: auto;
+  max-height: 75vh;
+  overflow: hidden; /* nonaktifkan scroll di luar */
+}
+
+#legend-content {
+  overflow-y: auto;
+  flex: 1;
+  margin-bottom: 8px; /* beri ruang agar tidak rapat dengan tombol */
+}
+
+#back-btn {
+  margin-top: auto;
+  align-self: flex-end;
+  background: none;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  color: #444;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+#back-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+  .sidebar-container {
+    position: static;
+    width: 100%;
+    max-height: 40vh;
+    overflow-y: auto;
+    background: white;
+    padding: 10px;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #legend,
+  #landmark-info {
+    width: 100%;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  #legend h4,
+  #landmark-info h4 {
+    margin-top: 0;
+  }
 }
