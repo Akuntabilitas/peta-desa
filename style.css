@@ -28,24 +28,20 @@ body {
 
 
 #legend {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 10px;
   padding: 10px 12px;
   font-family: sans-serif;
   font-size: 13px;
   color: #222;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-  z-index: 999;
   width: 240px;
-  max-height: 80vh;
+  max-height: 65vh;
   overflow-y: auto;
+  flex-grow: 1; /* isi sisa tinggi */
+  min-height: 0; 
 }
+
 
 #legend select {
   width: 100%;
@@ -579,4 +575,85 @@ html, body {
     left: 12px;
     bottom: 70px;
   }
+}
+
+.landmark-panel {
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+  width: 240px;
+  max-height: 35vh;
+
+   overflow: hidden; /* hanya setinggi kontennya */
+  flex-shrink: 0;
+}
+
+
+.landmark-panel h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  text-align: center;
+  font-weight: bold;
+  color: #444;
+}
+
+.landmark-panel ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.landmark-panel li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  color: #222;
+  line-height: 1.2;
+}
+
+.landmark-icon {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+}
+
+/* Sembunyikan di mode HP */
+@media screen and (max-width: 768px) {
+  .landmark-panel {
+    display: none;
+  }
+}
+
+.sidebar-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* spasi antara info-panel dan landmark-panel */
+  z-index: 1000;
+   max-height: calc(100vh - 10px);
+    overflow-y: auto;
+}
+
+.landmark-group {
+  margin-bottom: 10px;
+}
+
+.landmark-category {
+  font-weight: bold;
+  margin: 4px 0;
+  border-bottom: 1px solid #ccc;
+  font-size: 13px;
+}
+
+.landmark-icon {
+  display: inline-block;
+  width: 20px;
+  text-align: center;
+  margin-right: 4px;
 }
