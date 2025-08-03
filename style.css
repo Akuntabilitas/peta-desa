@@ -725,4 +725,9 @@ input:checked + .slider:before {
   #landmark-info h4 {
     margin-top: 0;
   }
+  
+}
+
+.leaflet-interactive:focus {
+  outline: none;
 }
