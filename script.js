@@ -660,10 +660,11 @@ function isKonsentrasiEkonomi(tipe) {
 
 const namaWilayah =
   currentLevel === 'kecamatan'
-    ? matchedLayer?.feature?.properties?.nmkec
+    ? `[${matchedLayer?.feature?.properties?.kdkec}] ${matchedLayer?.feature?.properties?.nmkec}`
     : currentLevel === 'desa'
-    ? matchedLayer?.feature?.properties?.nmdesa
-    : matchedLayer?.feature?.properties?.nmsls || '';
+    ? `[${matchedLayer?.feature?.properties?.kddesa}] ${matchedLayer?.feature?.properties?.nmdesa}`
+    : `[${matchedLayer?.feature?.properties?.kdsls}] ${matchedLayer?.feature?.properties?.nmsls}` || '';
+
 
 const jumlahBatasSLS = titikList.filter(t => t.tipe_landmark === 'Batas SLS').length;
 const jumlahBatasSegmen = titikList.filter(t => t.tipe_landmark === 'Batas Segmen').length;
@@ -945,14 +946,14 @@ function setNav(level, data = {}) {
   const nav = document.getElementById("simple-nav");
 
   const semua = `<span onclick="showKecamatan()">KAB BOYOLALI</span>`;
-  const kec = `<span onclick="showDesa()">${data.nmkec || 'Kecamatan'}</span>`;
-  const desa = `<span onclick="showSLS()">${data.nmdesa || 'Desa'}</span>`;
-  const sls = `SLS ${data.nmsls || data.kdsls || ''}`; // hanya teks, tidak bisa diklik
+  const kec = `<span onclick="showDesa()">[${selectedKecamatan || '??'}] ${data.nmkec || 'Kecamatan'}</span>`;
+  const desa = `<span onclick="showSLS()">[${selectedDesa || '??'}] ${data.nmdesa || 'Desa'}</span>`;
+  const sls = `[${selectedSLS || '??'}] ${data.nmsls || ''}`; // hanya teks, tidak bisa diklik
 
   if (level === 'kecamatan') {
-    nav.innerHTML = `${semua} › ${data.nmkec}`;
+    nav.innerHTML = `${semua} › ${kec}`;
   } else if (level === 'desa') {
-    nav.innerHTML = `${semua} › ${kec} › ${data.nmdesa}`;
+    nav.innerHTML = `${semua} › ${kec} › ${desa}`;
   } else if (level === 'sls') {
     nav.innerHTML = `${semua} › ${kec} › ${desa} › ${sls}`;
   } else {
@@ -962,14 +963,10 @@ function setNav(level, data = {}) {
 
 
 
+
 function getNamaKecamatan(kdkec) {
   const f = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
   return f ? f.properties.nmkec : '';
-}
-
-function getNamaKecamatan(kdkec) {
-  const kec = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
-  return kec ? kec.properties.nmkec : '';
 }
 
 function getNamaDesa(kdkec, kddesa) {
