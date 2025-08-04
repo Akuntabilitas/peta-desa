@@ -675,6 +675,26 @@ const nyasarLabelHTML = jumlahNyasar > 0
        <span class="nyasar-label has-nyasar">⚠️${jumlahNyasar} > 20m dari batas </span>
      </div>`
   : '';
+
+const slsKurangEmpat = new Set();
+const titikPerSLS = {};
+
+titikList.forEach(t => {
+  const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+  if (!titikPerSLS[key]) titikPerSLS[key] = 0;
+  titikPerSLS[key]++;
+});
+
+for (const key in titikPerSLS) {
+  if (titikPerSLS[key] < 4) slsKurangEmpat.add(key);
+}
+
+const slsKurangEmpatLabelHTML = slsKurangEmpat.size > 0
+  ? `<div class="cluster-label">
+       <span class="nyasar-label taggingkurang">❗ ${slsKurangEmpat.size} SLS < 4 titik</span>
+     </div>`
+  : '';
+
 const manualCluster = L.marker(center, {
   icon: L.divIcon({
     html: `
@@ -684,6 +704,7 @@ const manualCluster = L.marker(center, {
         <span class="konsentrasi-count">${jumlahEkonomi}</span>
       </div>
       ${nyasarLabelHTML}
+      ${slsKurangEmpatLabelHTML}
       <div class="cluster-label"><b>${namaWilayah}</b></div>
     `,
     className: '',
