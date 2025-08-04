@@ -350,11 +350,17 @@ input:checked + .slider:before {
   border: 0px solid #ccc;
   color: #000;
   background-color: white;
+  min-width: 85px;
 }
 
 .nyasar-label.has-nyasar {
   background-color: #ffeb3b; /* kuning terang */
   border-color: #fbc02d;
+}
+.nyasar-label.taggingkurang {
+  background-color: #ffa550; /* kuning terang */
+  border-color: #fbc02d;
+  
 }
 .konsentrasi-count {
   color: #ffffff; /* Hijau untuk Konsentrasi Ekonomi */
@@ -721,11 +727,12 @@ input:checked + .slider:before {
     box-shadow: none;
   }
 
+
+
   #legend h4,
   #landmark-info h4 {
     margin-top: 0;
   }
-  
 }
 
 .leaflet-interactive:focus {
