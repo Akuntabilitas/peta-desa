@@ -23,6 +23,7 @@ let geojsonData = { kecamatan: null, desa: null, sls: null };
 
 let taggingData = [];
 let slsMarkerLayer = L.layerGroup();
+const nyasarLineLayer = L.layerGroup();
 // Buat sekali saat load data awal
 const slsIndex = [];
 
@@ -174,14 +175,14 @@ Papa.parse(CSV_URL, {
       return dataTitik;
     });
     // Ambil updatedate dari baris pertama
-const firstRow = results.data[0];
-if (firstRow?.updatedate) {
-  const updateInfoEl = document.getElementById("update-date-text");
-  if (updateInfoEl) {
-    updateInfoEl.textContent = firstRow.updatedate;
-    document.getElementById("update-info").classList.remove("hidden");
-  }
-}
+    const firstRow = results.data[0];
+    if (firstRow?.updatedate) {
+      const updateInfoEl = document.getElementById("update-date-text");
+      if (updateInfoEl) {
+        updateInfoEl.textContent = firstRow.updatedate;
+        document.getElementById("update-info").classList.remove("hidden");
+      }
+    }
 
     taggingCache = taggingData;
     // Hitung isNyasar untuk semua titik saat awal
@@ -208,7 +209,7 @@ if (firstRow?.updatedate) {
             turfPoint
           );
           const dist = turf.distance(turfPoint, nearest, { units: "meters" });
-          t.isNyasar = dist > 50;
+          t.isNyasar = dist > 20;
         }
       } catch (err) {
         console.warn("Gagal memproses polygon SLS untuk nyasar:", err);
@@ -222,8 +223,8 @@ if (firstRow?.updatedate) {
     showKecamatan();
     showTaggingForWilayah();
     hideSpinner();
-    const totalNyasar = taggingData.filter(t => t.isNyasar).length;
-console.log('Jumlah titik nyasar:', totalNyasar);
+    const totalNyasar = taggingData.filter((t) => t.isNyasar).length;
+    console.log("Jumlah titik nyasar:", totalNyasar);
   },
 });
 
@@ -396,6 +397,7 @@ const ikonLandmark = {
 function showKecamatan() {
   clearMap();
   clearTagging();
+  nyasarLineLayer.clearLayers();
   selectedSLSHighlightLayer.clearLayers();
   currentLevel = "kecamatan";
   updateLegend(geojsonData.kecamatan.features, "kdkec", "nmkec");
@@ -431,6 +433,7 @@ function showKecamatan() {
 function showDesa() {
   clearMap();
   clearTagging();
+    nyasarLineLayer.clearLayers();
   selectedSLSHighlightLayer.clearLayers();
   currentLevel = "desa";
   const filtered = geojsonData.desa.features.filter(
@@ -474,6 +477,7 @@ function showDesa() {
 function showSLS() {
   clearMap();
   clearTagging();
+    nyasarLineLayer.clearLayers();
   selectedSLSHighlightLayer.clearLayers();
   currentLevel = "sls";
   const filtered = geojsonData.sls.features.filter(
@@ -573,59 +577,123 @@ function showTaggingForWilayah(
 
   // Zoom ke satu SLS, tampilkan titik individu + label
   if (!useCluster) {
-    filteredTagging.forEach((t) => {
-      if (!isNaN(t.lat) && !isNaN(t.lng)) {
-        const jenis = ikonLandmark[t.tipe_landmark] || {
-          icon: "❓",
-          color: "#999",
-        };
-        const extraStyle = t.isNyasar
-          ? `
-    border: 2px solid gold;
-    background-color: rgba(255, 255, 100, 0.8);
+  slsMarkerLayer.clearLayers();
+  nyasarLineLayer.clearLayers();
+  filteredTagging.forEach((t) => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      const jenis = ikonLandmark[t.tipe_landmark] || {
+        icon: "❓",
+        color: "#999",
+      };
+      const extraStyle = t.isNyasar
+        ? `
+  border: 2px solid gold;
+  background-color: rgba(255, 255, 100, 0.8);
+  border-radius: 50%;
+  font-weight: bold;
+`
+        : "";
+      const icon = L.divIcon({
+        html: `
+  <div style="
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: ${t.isNyasar ? "#000" : jenis.color};
+    background-color: ${t.isNyasar ? "rgba(255, 255, 100, 0.8)" : "transparent"};
+    border: ${t.isNyasar ? "2px solid gold" : "none"};
     border-radius: 50%;
     font-weight: bold;
-  `
-          : "";
-        const icon = L.divIcon({
-          html: `
-    <div style="
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      color: ${t.isNyasar ? "#000" : jenis.color};
-      background-color: ${t.isNyasar ? "rgba(255, 255, 100, 0.8)" : "transparent"};
-      border: ${t.isNyasar ? "2px solid gold" : "none"};
-      border-radius: 50%;
-      font-weight: bold;
-    ">${jenis.icon}</div>
-  `,
-          className: "tipe-landmark-icon",
-          iconSize: [28, 28],
-          iconAnchor: [14, 14], // center bottom
-        });
+  ">${jenis.icon}</div>
+`,
+        className: "tipe-landmark-icon",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
 
-        const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
-          `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
-        );
+      const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
+        `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
+      );
 
-        marker.bindTooltip(t.nama || "Tanpa Nama", {
-          permanent: true,
-          direction: "bottom",
-          offset: [0, 14],
-          className: "tagging-label",
-        });
+    // Buat tooltip
+      const tooltip = L.tooltip({
+        permanent: true,
+        direction: "bottom",
+        offset: [0, 14],
+        className: "tagging-label",
+      }).setContent(t.nama || "Tanpa Nama");
 
-        slsMarkerLayer.addLayer(marker);
+      marker.bindTooltip(tooltip);
+
+      // Tambahkan toggle saat diklik
+      let tooltipVisible = true;
+      marker.on("click", () => {
+        if (tooltipVisible) {
+          marker.unbindTooltip();
+        } else {
+          marker.bindTooltip(tooltip);
+        }
+        tooltipVisible = !tooltipVisible;
+      });
+
+      // Jika nyasar, tambahkan garis dan tooltip jarak
+      if (t.isNyasar && t.jarakKeBatas && slsIndex[`${t.kdkec}-${t.kddesa}-${t.kdsls}`]) {
+        const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+        const geom = slsIndex[key];
+
+        let polygon;
+        if (geom.type === "Polygon") {
+          polygon = turf.polygon(geom.coordinates);
+        } else if (geom.type === "MultiPolygon") {
+          polygon = turf.multiPolygon(geom.coordinates);
+        }
+
+        if (polygon) {
+          const garisPoligon = turf.polygonToLine(polygon);
+          const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
+          const nearest = turf.nearestPointOnLine(garisPoligon, turfPoint);
+
+          // Ganti tooltip dengan info jarak
+          marker.unbindTooltip();
+          marker.bindTooltip(
+            `${t.nama}<br>${t.jarakKeBatas.toFixed(1)} m dari batas`,
+            {
+              permanent: true,
+              direction: "bottom",
+              offset: [0, 14],
+              className: "tagging-label",
+            }
+          );
+
+          // Tambahkan garis ke layer
+          const garis = L.polyline(
+            [
+              [t.lat, t.lng],
+              [nearest.geometry.coordinates[1], nearest.geometry.coordinates[0]],
+            ],
+            {
+              color: "gold",
+              weight: 2,
+              dashArray: "4,4",
+            }
+          );
+          nyasarLineLayer.addLayer(garis);
+        }
       }
-    });
-    map.addLayer(slsMarkerLayer);
 
-    return;
-  }
+      slsMarkerLayer.addLayer(marker);
+    }
+  });
+
+  map.addLayer(slsMarkerLayer);
+  map.addLayer(nyasarLineLayer);
+
+  return;
+}
+
 
   // Cluster manual berdasarkan kode wilayah
   const groupByCode = {};
@@ -646,64 +714,67 @@ function showTaggingForWilayah(
   });
 
   // === [1] Preprocess Indexing Layer SLS ===
-const slsLayerGroup = layers["sls"];
+  const slsLayerGroup = layers["sls"];
 
-if (slsLayerGroup) {
-  slsLayerGroup.eachLayer((l) => {
-    const props = l.feature?.properties;
-    const geom = l.feature?.geometry;
-    if (!props || !geom) return;
+  if (slsLayerGroup) {
+    slsLayerGroup.eachLayer((l) => {
+      const props = l.feature?.properties;
+      const geom = l.feature?.geometry;
+      if (!props || !geom) return;
 
-    const key = `${props.kdkec}-${props.kddesa}-${props.kdsls}`;
-    slsIndex[key] = geom;
-  });
-}
-
+      const key = `${props.kdkec}-${props.kddesa}-${props.kdsls}`;
+      slsIndex[key] = geom;
+    });
+  }
 
   // === [2] Tandai isNyasar untuk tiap titik tagging ===
 
   // === [2] Tandai isNyasar untuk tiap titik tagging (diproses 1x per titik) ===
   filteredTagging.forEach((t) => {
-  if (t._checkedNyasar) return;
-  if (t.tipe_landmark !== 'Batas SLS') {
-    t.isNyasar = false; // bukan titik yang perlu dicek nyasar
-    return;
-  }
-  if (!t.lat || !t.lng || !t.kdkec || !t.kddesa || !t.kdsls) return;
-
-  const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
-  const geom = slsIndex[key];
-  if (!geom) return;
-
-  try {
-    const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
-    let polygon = null;
-
-    if (geom.type === "Polygon") {
-      polygon = turf.polygon(geom.coordinates);
-    } else if (geom.type === "MultiPolygon") {
-      polygon = turf.multiPolygon(geom.coordinates);
+    if (t._checkedNyasar) return;
+    if (t.tipe_landmark !== "Batas SLS") {
+      t.isNyasar = false; // bukan titik yang perlu dicek nyasar
+      return;
     }
+    if (!t.lat || !t.lng || !t.kdkec || !t.kddesa || !t.kdsls) return;
 
-    if (polygon) {
-      const nearest = turf.nearestPointOnLine(
-        turf.polygonToLine(polygon),
-        turfPoint
-      );
-      const dist = turf.distance(turfPoint, nearest, { units: "meters" });
-      t.isNyasar = dist > 20;
-    } else {
+    const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+    const geom = slsIndex[key];
+    if (!geom) return;
+
+    try {
+      const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
+      let polygon = null;
+
+      if (geom.type === "Polygon") {
+        polygon = turf.polygon(geom.coordinates);
+      } else if (geom.type === "MultiPolygon") {
+        polygon = turf.multiPolygon(geom.coordinates);
+      }
+
+      if (polygon) {
+        const nearest = turf.nearestPointOnLine(
+          turf.polygonToLine(polygon),
+          turfPoint
+        );
+        const dist = turf.distance(turfPoint, nearest, { units: "meters" });
+        t.jarakKeBatas = dist;
+        t.isNyasar = dist > 20;
+      } else {
+        t.isNyasar = false;
+      }
+    } catch (e) {
       t.isNyasar = false;
+      console.warn("Gagal menghitung nyasar untuk titik:", t, e);
     }
-  } catch (e) {
-    t.isNyasar = false;
-    console.warn("Gagal menghitung nyasar untuk titik:", t, e);
-  }
 
-  t._checkedNyasar = true;
-});
+    t._checkedNyasar = true;
+  });
 
-console.log("Jumlah titik nyasar:", filteredTagging.filter(t => t.isNyasar).length);
+  console.log(
+    "Jumlah titik nyasar:",
+    filteredTagging.filter((t) => t.isNyasar).length
+  );
 
   Object.entries(groupByCode).forEach(([kode, titikList]) => {
     const group = L.featureGroup();
