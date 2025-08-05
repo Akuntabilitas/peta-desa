@@ -738,3 +738,18 @@ input:checked + .slider:before {
 .leaflet-interactive:focus {
   outline: none;
 }
+
+#update-info {
+  position: absolute;
+  top: 48px; /* di bawah simple-nav */
+  left: 12px;
+  background: rgba(0, 0, 0, 0.5); /* transparan hitam */
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 998;
+  font-family: 'Segoe UI', sans-serif;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
