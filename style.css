@@ -552,11 +552,11 @@ input:checked + .slider:before {
     flex-direction: column;
   }
 
-  #update-info {
-  position: absolute;
-  top: 5px; /* di bawah simple-nav */
-  left: 5px;
-  }
+  .update-info {
+    left: 10px;
+    right: auto;
+    font-size: 13px;
+    padding: 5px 10px;
   
   #simple-nav {
     position: static;
