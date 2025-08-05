@@ -433,7 +433,7 @@ function showKecamatan() {
 function showDesa() {
   clearMap();
   clearTagging();
-    nyasarLineLayer.clearLayers();
+  nyasarLineLayer.clearLayers();
   selectedSLSHighlightLayer.clearLayers();
   currentLevel = "desa";
   const filtered = geojsonData.desa.features.filter(
@@ -477,7 +477,7 @@ function showDesa() {
 function showSLS() {
   clearMap();
   clearTagging();
-    nyasarLineLayer.clearLayers();
+  nyasarLineLayer.clearLayers();
   selectedSLSHighlightLayer.clearLayers();
   currentLevel = "sls";
   const filtered = geojsonData.sls.features.filter(
@@ -577,24 +577,24 @@ function showTaggingForWilayah(
 
   // Zoom ke satu SLS, tampilkan titik individu + label
   if (!useCluster) {
-  slsMarkerLayer.clearLayers();
-  nyasarLineLayer.clearLayers();
-  filteredTagging.forEach((t) => {
-    if (!isNaN(t.lat) && !isNaN(t.lng)) {
-      const jenis = ikonLandmark[t.tipe_landmark] || {
-        icon: "❓",
-        color: "#999",
-      };
-      const extraStyle = t.isNyasar
-        ? `
+    slsMarkerLayer.clearLayers();
+    nyasarLineLayer.clearLayers();
+    filteredTagging.forEach((t) => {
+      if (!isNaN(t.lat) && !isNaN(t.lng)) {
+        const jenis = ikonLandmark[t.tipe_landmark] || {
+          icon: "❓",
+          color: "#999",
+        };
+        const extraStyle = t.isNyasar
+          ? `
   border: 2px solid gold;
   background-color: rgba(255, 255, 100, 0.8);
   border-radius: 50%;
   font-weight: bold;
 `
-        : "";
-      const icon = L.divIcon({
-        html: `
+          : "";
+        const icon = L.divIcon({
+          html: `
   <div style="
     width: 28px;
     height: 28px;
@@ -609,91 +609,104 @@ function showTaggingForWilayah(
     font-weight: bold;
   ">${jenis.icon}</div>
 `,
-        className: "tipe-landmark-icon",
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
+          className: "tipe-landmark-icon",
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
 
-      const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
-        `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
-      );
+        const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
+          `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
+        );
 
-    // Buat tooltip
-      const tooltip = L.tooltip({
-        permanent: true,
-        direction: "bottom",
-        offset: [0, 14],
-        className: "tagging-label",
-      }).setContent(t.nama || "Tanpa Nama");
+        // Buat tooltip
+        const tooltip = L.tooltip({
+          permanent: true,
+          direction: "bottom",
+          offset: [0, 14],
+          className: "tagging-label",
+        }).setContent(t.nama || "Tanpa Nama");
 
-      marker.bindTooltip(tooltip);
+        marker.bindTooltip(tooltip);
 
-      // Tambahkan toggle saat diklik
-      let tooltipVisible = true;
-      marker.on("click", () => {
-        if (tooltipVisible) {
-          marker.unbindTooltip();
-        } else {
-          marker.bindTooltip(tooltip);
+        // Tambahkan toggle saat diklik
+        let tooltipVisible = true;
+        marker.on("click", () => {
+          if (tooltipVisible) {
+            marker.unbindTooltip();
+          } else {
+            marker.bindTooltip(tooltip);
+          }
+          tooltipVisible = !tooltipVisible;
+        });
+
+        // Jika nyasar, tambahkan garis dan tooltip jarak
+        if (
+          t.isNyasar &&
+          t.jarakKeBatas &&
+          slsIndex[`${t.kdkec}-${t.kddesa}-${t.kdsls}`]
+        ) {
+          const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+          const geom = slsIndex[key];
+
+          let polygon;
+          if (geom.type === "Polygon") {
+            polygon = turf.polygon(geom.coordinates);
+          } else if (geom.type === "MultiPolygon") {
+            polygon = turf.multiPolygon(geom.coordinates);
+          }
+
+          if (polygon) {
+            const garisPoligon = turf.polygonToLine(polygon);
+            const turfPoint = turf.point([
+              parseFloat(t.lng),
+              parseFloat(t.lat),
+            ]);
+            const nearest = turf.nearestPointOnLine(garisPoligon, turfPoint);
+
+            // Ganti tooltip dengan info jarak
+            marker.unbindTooltip();
+            marker.bindTooltip(
+              `<div style="background: #ffffcc; padding: 4px 6px; border-radius: 4px;">
+     <strong>${t.nama}</strong><br>
+     ${t.jarakKeBatas.toFixed(1)} m dari batas<br>
+     <em style="color: #555;">(cek apakah batas SLS <br> berubah ke sini)</em>
+   </div>`,
+              {
+                permanent: true,
+                direction: "bottom",
+                offset: [0, 14],
+                className: "tagging-label",
+              }
+            );
+
+            // Tambahkan garis ke layer
+            const garis = L.polyline(
+              [
+                [t.lat, t.lng],
+                [
+                  nearest.geometry.coordinates[1],
+                  nearest.geometry.coordinates[0],
+                ],
+              ],
+              {
+                color: "gold",
+                weight: 2,
+                dashArray: "4,4",
+              }
+            );
+            nyasarLineLayer.addLayer(garis);
+          }
         }
-        tooltipVisible = !tooltipVisible;
-      });
 
-      // Jika nyasar, tambahkan garis dan tooltip jarak
-      if (t.isNyasar && t.jarakKeBatas && slsIndex[`${t.kdkec}-${t.kddesa}-${t.kdsls}`]) {
-        const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
-        const geom = slsIndex[key];
-
-        let polygon;
-        if (geom.type === "Polygon") {
-          polygon = turf.polygon(geom.coordinates);
-        } else if (geom.type === "MultiPolygon") {
-          polygon = turf.multiPolygon(geom.coordinates);
-        }
-
-        if (polygon) {
-          const garisPoligon = turf.polygonToLine(polygon);
-          const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
-          const nearest = turf.nearestPointOnLine(garisPoligon, turfPoint);
-
-          // Ganti tooltip dengan info jarak
-          marker.unbindTooltip();
-          marker.bindTooltip(
-            `${t.nama}<br>${t.jarakKeBatas.toFixed(1)} m dari batas`,
-            {
-              permanent: true,
-              direction: "bottom",
-              offset: [0, 14],
-              className: "tagging-label",
-            }
-          );
-
-          // Tambahkan garis ke layer
-          const garis = L.polyline(
-            [
-              [t.lat, t.lng],
-              [nearest.geometry.coordinates[1], nearest.geometry.coordinates[0]],
-            ],
-            {
-              color: "gold",
-              weight: 2,
-              dashArray: "4,4",
-            }
-          );
-          nyasarLineLayer.addLayer(garis);
-        }
+        slsMarkerLayer.addLayer(marker);
       }
+    });
 
-      slsMarkerLayer.addLayer(marker);
-    }
-  });
+    map.addLayer(slsMarkerLayer);
+    map.addLayer(nyasarLineLayer);
 
-  map.addLayer(slsMarkerLayer);
-  map.addLayer(nyasarLineLayer);
-
-  return;
-}
-
+    return;
+  }
 
   // Cluster manual berdasarkan kode wilayah
   const groupByCode = {};
