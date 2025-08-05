@@ -173,6 +173,16 @@ Papa.parse(CSV_URL, {
       };
       return dataTitik;
     });
+    // Ambil updatedate dari baris pertama
+const firstRow = results.data[0];
+if (firstRow?.updatedate) {
+  const updateInfoEl = document.getElementById("update-date-text");
+  if (updateInfoEl) {
+    updateInfoEl.textContent = firstRow.updatedate;
+    document.getElementById("update-info").classList.remove("hidden");
+  }
+}
+
     taggingCache = taggingData;
     // Hitung isNyasar untuk semua titik saat awal
     taggingData.forEach((t) => {
