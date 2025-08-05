@@ -762,7 +762,7 @@ input:checked + .slider:before {
   .update-info {
     left: 12px;
     right: auto;
-    top: 48px;
+    top: 12px;
     font-size: 12px;
     padding: 5px 8px;
   }
