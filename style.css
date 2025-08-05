@@ -742,7 +742,7 @@ input:checked + .slider:before {
 .update-info {
   position: absolute;
   top: 48px; /* di bawah #simple-nav */
-  right: 12px;
+  left: 12px;
   background: rgba(0, 0, 0, 0.5); /* background transparan */
   color: #fff;
   padding: 6px 10px;
