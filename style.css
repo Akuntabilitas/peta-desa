@@ -765,6 +765,9 @@ input:checked + .slider:before {
   border-radius: 5px;
   z-index: 1000;
   backdrop-filter: blur(3px);
+  display: inline-block;       /* ❗ Membatasi lebar sesuai isi */
+  max-width: 90vw;             /* ❗ Cegah terlalu lebar di layar kecil */
+  white-space: nowrap;  
 }
 
 /* Sembunyikan saat belum ada data */
