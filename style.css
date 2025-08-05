@@ -757,8 +757,9 @@ input:checked + .slider:before {
 .update-info {
   position: absolute;
   top: 10px;
-  right: 10px; /* Default: pojok kanan */
-  background: rgba(0, 0, 0, 0.5);
+  right: 10px;
+  left: auto;
+  background: rgba(0, 0, 0, 0.5); /* transparan */
   color: #fff;
   padding: 6px 12px;
   font-size: 14px;
@@ -767,15 +768,10 @@ input:checked + .slider:before {
   backdrop-filter: blur(3px);
   display: inline-block;       /* ❗ Membatasi lebar sesuai isi */
   max-width: 90vw;             /* ❗ Cegah terlalu lebar di layar kecil */
-  white-space: nowrap;  
+  white-space: nowrap;         /* ❗ Jangan pindah baris */
 }
 
-/* Sembunyikan saat belum ada data */
-.hidden {
-  display: none;
-}
-
-/* Jika layar kecil (misalnya di HP), pindahkan ke pojok kiri */
+/* Responsif untuk layar kecil */
 @media (max-width: 768px) {
   .update-info {
     left: 10px;
