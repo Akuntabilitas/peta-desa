@@ -668,11 +668,11 @@ function showTaggingForWilayah(
             // Ganti tooltip dengan info jarak
             marker.unbindTooltip();
             marker.bindTooltip(
-              `<div style="background: #ffffcc; padding: 4px 6px; border-radius: 4px;">
-     <strong>${t.nama}</strong><br>
-     ${t.jarakKeBatas.toFixed(1)} m dari batas<br>
-     <em style="color: #555;">(cek apakah batas SLS <br> berubah ke sini)</em>
-   </div>`,
+`<div style="background: rgba(255, 255, 204, 0.5); padding: 4px 6px; border-radius: 4px;">
+  <strong>${t.nama}</strong><br>
+  ${t.jarakKeBatas.toFixed(1)} m dari batas<br>
+  <em style="color: #555;">(cek apakah batas SLS <br> berubah ke sini)</em>
+</div>`,
               {
                 permanent: true,
                 direction: "bottom",
