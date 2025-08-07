@@ -146,13 +146,14 @@ body {
 }
 
 .leaflet-tooltip.tagging-label {
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8); /* semi-transparan */
   border: 1px solid #333;
   color: #000;
-  font-size: 12px;
+  font-size: 8px;
   padding: 2px 4px;
   border-radius: 3px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  opacity: 0.1; /* atur transparansi keseluruhan (opsional) */
 }
 
 .custom-cluster-icon {
@@ -767,5 +768,4 @@ input:checked + .slider:before {
     padding: 5px 8px;
   }
 }
-
 
