@@ -17,7 +17,6 @@ let selectedSLS = null;
 let mode = "wilayah";
 let slsZoomed = false;
 let selectedSLSLayer = null;
-
 let layers = { kecamatan: null, desa: null, sls: null };
 let geojsonData = { kecamatan: null, desa: null, sls: null };
 
@@ -487,46 +486,49 @@ function showSLS() {
   );
   updateLegend(filtered, "kdsls", "nmsls");
 
-  layers.sls = L.geoJSON(
-    { type: "FeatureCollection", features: filtered },
-    {
-      style: { color: "#e76f51", weight: 2, fillOpacity: 0 },
-      onEachFeature: (feature, layer) => {
-        layer.bindTooltip(feature.properties.nmsls, { sticky: true });
-        layer.on({
-          click: () => {
-            selectedSLS = feature.properties.kdsls;
-            slsZoomed = true;
+layers.sls = L.geoJSON(
+  { type: "FeatureCollection", features: filtered },
+  {
+    style: { color: "#e76f51", weight: 2, fillOpacity: 0 },
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
 
-            selectedSLSHighlightLayer.clearLayers(); // Hapus highlight sebelumnya
+      layer.on({
+        click: () => {
+          selectedSLS = feature.properties.kdsls;
+          slsZoomed = true;
 
-            if (feature?.geometry) {
-              selectedSLSHighlightLayer.addData(feature);
-            }
-            map.fitBounds(layer.getBounds(), {
-              paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
-            });
+          selectedSLSHighlightLayer.clearLayers();
 
-            showTaggingForWilayah(
-              selectedKecamatan,
-              selectedDesa,
-              selectedSLS,
-              6,
-              false
-            );
+          if (feature?.geometry) {
+            selectedSLSHighlightLayer.addData(feature);
+          }
 
-            setNav("sls", {
-              nmkec: getNamaKecamatan(selectedKecamatan),
-              nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
-              nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS),
-            });
-          },
-          mouseover: () => highlightFeature(layer),
-          mouseout: () => resetHighlight(layer),
-        });
-      },
-    }
-  ).addTo(map);
+          map.fitBounds(layer.getBounds(), {
+            paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+          });
+
+          showTaggingForWilayah(
+            selectedKecamatan,
+            selectedDesa,
+            selectedSLS,
+            6,
+            false
+          );
+          // 🔹 Update navigasi
+          setNav("sls", {
+            nmkec: getNamaKecamatan(selectedKecamatan),
+            nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+            nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS),
+          });
+        },
+
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer),
+      });
+    },
+  }
+).addTo(map);
 
   map.fitBounds(layers.sls.getBounds(), {
     paddingTopLeft: [0, 0],
@@ -1034,6 +1036,7 @@ function updateLegend(features, codeProp, nameProp) {
           selectedDesa = f.properties.kddesa;
           showSLS();
         } else if (currentLevel === "sls") {
+          selectedSLSHighlightLayer.clearLayers();
           selectedSLS = f.properties.kdsls;
           const layer = findLayerByFeature(f);
           if (layer) {
@@ -1045,6 +1048,7 @@ function updateLegend(features, codeProp, nameProp) {
               6,
               false
             );
+            selectedSLSHighlightLayer.addData(layer.toGeoJSON());
           }
         }
       });
