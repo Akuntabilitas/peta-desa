@@ -169,6 +169,7 @@ Papa.parse(CSV_URL, {
         kddesa: t.kddesa,
         kdsls: t.kdsls,
         tipe_landmark: t.tipe_landmark?.trim() || "Lainnya",
+        rubahbatas : t.rubahbatas,
         isNyasar: false, // default
       };
       return dataTitik;
@@ -748,6 +749,10 @@ function showTaggingForWilayah(
   filteredTagging.forEach((t) => {
     if (t._checkedNyasar) return;
     if (t.tipe_landmark !== "Batas SLS") {
+      t.isNyasar = false; // bukan titik yang perlu dicek nyasar
+      return;
+    }
+    if (t.rubahbatas == "Berubah") {
       t.isNyasar = false; // bukan titik yang perlu dicek nyasar
       return;
     }
