@@ -1,1049 +1,1561 @@
-// --- PETA DAN TILE LAYER ---
-const map = L.map("map", {
-  zoomControl: false
-}).setView([-7.5, 110.6], 10);
+showSpinner();
+let map = L.map("map").setView([-7.5, 110.6], 10);
+map.zoomControl.setPosition("bottomleft");
 L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  { attribution: "Tiles © Esri" }
+  {
+    attribution: "Tiles © Esri",
+  }
 ).addTo(map);
 
-// --- VARIABEL GLOBAL ---
+const manualClusterLayer = L.layerGroup();
+
+let currentLevel = "kabupaten";
+let selectedKecamatan = null;
+let selectedDesa = null;
+let selectedSLS = null;
+let mode = "wilayah";
+let slsZoomed = false;
+let selectedSLSLayer = null;
+let layers = { kecamatan: null, desa: null, sls: null };
 let geojsonData = { kecamatan: null, desa: null, sls: null };
-let geojsonSLSReady = false;
-let muatanCSVReady = false;
-let muatanData = [];
-let muatanByKode = {}; // kdkec+kddesa+kdsls -> record
-let currentGeojsonLayer = null;
-let slsLayerGroup = null; // assigned by createSLSLayer(...)
-let currentLevel = "kab";
-// --- INDEXEDDB CACHE (unchanged) ---
-const DB_NAME = "geojson-cache";
-const STORE_NAME = "geojson";
-const DB_VERSION = 1;
 
-map.on("popupopen", function (e) {
-  console.log("Popup opened", e);
-  const popupNode = e.popup.getElement();
-  const layer = e.popup._source;
+let taggingData = [];
+let slsMarkerLayer = L.layerGroup();
+const nyasarLineLayer = L.layerGroup();
+// Buat sekali saat load data awal
+const slsIndex = [];
 
-  if (!popupNode) {
-    console.warn("Popup element not found!");
-    return;
-  }
-  if (!layer) {
-    console.warn("Popup source layer not found!");
-    return;
-  }
-  const btnGoogle = popupNode.querySelector(".btnGoogleMaps");
-});
-
-document.body.addEventListener("click", function (e) {
-  if (e.target.classList.contains("btnGoogleMaps")) {
-    e.stopPropagation();
-    console.log("Google Maps clicked by delegation");
-    const lat = e.target.getAttribute("data-lat");
-    const lng = e.target.getAttribute("data-lng");
-    if (lat && lng) {
-      const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-      window.open(url, "_blank");
-    } else {
-      console.warn("Data lat/lng tidak ditemukan pada tombol");
+if (layers["sls"]) {
+  layers["sls"].eachLayer((layer) => {
+    const prop = layer.feature?.properties;
+    if (prop?.kdkec && prop?.kddesa && prop?.kdsls) {
+      slsIndex.push({
+        kode: {
+          kdkec: prop.kdkec,
+          kddesa: prop.kddesa,
+          kdsls: prop.kdsls,
+        },
+        layer: layer,
+      });
     }
-  }
+  });
+}
+
+function getSLSLayerByCode(kdkec, kddesa, kdsls) {
+  return (
+    slsIndex.find(
+      (p) =>
+        p.kode.kdkec === kdkec &&
+        p.kode.kddesa === kddesa &&
+        p.kode.kdsls === kdsls
+    )?.layer || null
+  );
+}
+let slsLayer = L.geoJSON(null, {
+  style: {
+    color: "#e76f51",
+    weight: 2,
+    fillOpacity: 0,
+  },
 });
 
-function openIndexedDB() {
+map.addLayer(slsMarkerLayer);
+// Ambil data GeoJSON
+// Membuat atau membuka database IndexedDB
+function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject("Gagal membuka IndexedDB");
-    request.onsuccess = () => resolve(request.result);
+    const request = indexedDB.open("GeoJSONDB", 1);
+
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+      if (!db.objectStoreNames.contains("geojson")) {
+        db.createObjectStore("geojson");
       }
     };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
-function fetchGeoJSONWithCache(key, url) {
-  return openIndexedDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const getRequest = store.get(key);
-      getRequest.onsuccess = async () => {
-        if (getRequest.result) {
-          resolve(JSON.parse(getRequest.result));
-        } else {
-          try {
-            const response = await fetch(url);
-            const data = await response.json();
-            const tx2 = db.transaction(STORE_NAME, "readwrite");
-            const store2 = tx2.objectStore(STORE_NAME);
-            store2.put(JSON.stringify(data), key);
-            resolve(data);
-          } catch (err) {
-            reject(err);
-          }
-        }
-      };
-      getRequest.onerror = () => reject("Gagal mengambil dari IndexedDB");
-    });
+// Simpan data ke IndexedDB
+async function saveToIndexedDB(key, data) {
+  const db = await openDB();
+  const tx = db.transaction("geojson", "readwrite");
+  tx.objectStore("geojson").put(data, key);
+  return tx.complete;
+}
+
+// Ambil data dari IndexedDB
+async function loadFromIndexedDB(key) {
+  const db = await openDB();
+  const tx = db.transaction("geojson", "readonly");
+  const request = tx.objectStore("geojson").get(key);
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
-// --- PARSING CSV MUATAN (dari Google Sheets) ---
+// Fetch atau ambil dari cache
+async function fetchGeoJSONWithCache(key, url) {
+  const cachedData = await loadFromIndexedDB(key);
+  if (cachedData) {
+    console.log(`Loaded ${key} from IndexedDB`);
+    return cachedData;
+  } else {
+    const res = await fetch(url);
+    const data = await res.json();
+    await saveToIndexedDB(key, data);
+    console.log(`Fetched and saved ${key}`);
+    return data;
+  }
+}
+
+// Penggunaan:
+(async () => {
+  geojsonData.kecamatan = await fetchGeoJSONWithCache(
+    "kecamatan",
+    "data/final_kec_202413309.geojson"
+  );
+  geojsonData.desa = await fetchGeoJSONWithCache(
+    "desa",
+    "data/final_desa_202413309.geojson"
+  );
+
+  geojsonData.sls = await fetchGeoJSONWithCache(
+    "sls",
+    "data/final_sls_202413309.geojson"
+  );
+
+  layers.sls = L.geoJSON(geojsonData.sls);
+  layers.sls.eachLayer((layer) => {
+    const prop = layer.feature?.properties;
+    if (prop?.kdkec && prop?.kddesa && prop?.kdsls) {
+      slsIndex.push({
+        kode: {
+          kdkec: prop.kdkec,
+          kddesa: prop.kddesa,
+          kdsls: prop.kdsls,
+        },
+        layer: layer,
+      });
+    }
+  });
+})();
+
+// Ambil data tagging
+let taggingCache = []; // definisi global di awal, di luar semua fungsi
+
 const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZIQJPaTNA5rhW7_glGbrJLQh9bS0ciL_A866bG5VKEbkiIMjavCIWnC3Ia0rytlMadjzc8KovSXm5/pub?output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pub?gid=0&single=true&output=csv";
 
 Papa.parse(CSV_URL, {
   download: true,
   header: true,
-  skipEmptyLines: true,
   complete: (results) => {
-    muatanData = results.data.map((row) => {
-      const idSLS = (row["ID SLS"] || "").trim();
-      const kdkec = idSLS.substring(4, 7);
-      const kddesa = idSLS.substring(7, 10);
-      const kdsls = idSLS.substring(10, 14);
-      const kodeKey = `${kdkec}${kddesa}${kdsls}`;
-      const record = {
-        idSLS,
-        namaSLS: row["Nama SLS"] || "",
-        namaDesa: row["Desa"] || "",
-        namaKec: row["Kecamatan"] || "",
-        // keep numeric fields as numbers
-        totalMuatan: parseFloat(row["Total Muatan"]) || 0,
-        muatanKK: parseFloat(row["Perkiraan Jumlah Muatan KK (Keluarga)"]) || 0,
-        jumlahBTT: parseFloat(row["Jumlah BTT"]) || 0,
-        jumlahBTTKosong: parseFloat(row["Jumlah BTT Kosong"]) || 0,
-        jumlahBKU: parseFloat(row["Jumlah BKU"]) || 0,
-        jumlahBBTT: parseFloat(row["Jumlah BBTT Non Usaha"]) || 0,
-        muatanUsaha: parseFloat(row["Perkiraan Jumlah Muatan Usaha"]) || 0,
-        // keep original status string but we'll normalize when checking
-        statusLKM: row["Status LKM"] || "",
-        namapml: row["Nama Pengawas"] || "",
-        namappl: row["Nama Petugas"] || "",
+    taggingData = results.data.map((t) => {
+      const lat = parseFloat(t.latitude);
+      const lng = parseFloat(t.longitude);
+
+      const dataTitik = {
+        lat,
+        lng,
+        nama: t.nama || t.nm_project || "Tanpa Nama",
+        PML: t.PML,
+        PPL: t.PPL,
+        kdkec: t.kdkec,
+        kddesa: t.kddesa,
+        kdsls: t.kdsls,
+        tipe_landmark: t.tipe_landmark?.trim() || "Lainnya",
+        rubahbatas : t.rubahbatas,
+        isNyasar: false, // default
       };
-      muatanByKode[kodeKey] = record;
-      return record;
+      return dataTitik;
+    });
+    // Ambil updatedate dari baris pertama
+    const firstRow = results.data[0];
+    if (firstRow?.updatedate) {
+      const updateInfoEl = document.getElementById("update-date-text");
+      if (updateInfoEl) {
+        updateInfoEl.textContent = firstRow.updatedate;
+        document.getElementById("update-info").classList.remove("hidden");
+      }
+    }
+
+    taggingCache = taggingData;
+    // Hitung isNyasar untuk semua titik saat awal
+    taggingData.forEach((t) => {
+      if (!t.lat || !t.lng || !t.kdkec || !t.kddesa || !t.kdsls) return;
+
+      const matchedSLS = getSLSLayerByCode(t.kdkec, t.kddesa, t.kdsls);
+      if (!matchedSLS?.feature?.geometry) return;
+
+      try {
+        const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
+        const geom = matchedSLS.feature.geometry;
+        let polygon = null;
+
+        if (geom.type === "Polygon") {
+          polygon = turf.polygon(geom.coordinates);
+        } else if (geom.type === "MultiPolygon") {
+          polygon = turf.multiPolygon(geom.coordinates);
+        }
+
+        if (polygon) {
+          const nearest = turf.nearestPointOnLine(
+            turf.polygonToLine(polygon),
+            turfPoint
+          );
+          const dist = turf.distance(turfPoint, nearest, { units: "meters" });
+          t.isNyasar = dist > 20;
+        }
+      } catch (err) {
+        console.warn("Gagal memproses polygon SLS untuk nyasar:", err);
+      }
     });
 
-    muatanCSVReady = true;
-    if (geojsonSLSReady) renderLevelAwal();
+    // ⬇ Tambahkan cache setelah taggingData selesai diisi dan dianalisis
+    cacheTaggingData();
+
+    populatePetugasDatalist();
+    showKecamatan();
+    showTaggingForWilayah();
+    hideSpinner();
+    const totalNyasar = taggingData.filter((t) => t.isNyasar).length;
+    console.log("Jumlah titik nyasar:", totalNyasar);
   },
 });
 
-// --- LOAD GEOJSON (with cache) ---
-(async () => {
-  try {
-    geojsonData.kecamatan = await fetchGeoJSONWithCache(
-      "kecamatan",
-      "data/final_kec_202413309.geojson"
-    );
-    geojsonData.desa = await fetchGeoJSONWithCache(
-      "desa",
-      "data/final_desa_202413309.geojson"
-    );
-    geojsonData.sls = await fetchGeoJSONWithCache(
-      "sls",
-      "data/final_sls_202413309.geojson"
-    );
-    geojsonSLSReady = true;
-    if (muatanCSVReady) renderLevelAwal();
-  } catch (err) {
-    console.error("Gagal load geojson:", err);
-  }
-})();
+// Fungsi caching tagging per wilayah
+function cacheTaggingData() {
+  taggingCache.perKecamatan = {};
+  taggingCache.perDesa = {};
+  taggingCache.perSLS = {};
 
-// ---------------------------
-// UTILITY: color gradient
-// ---------------------------
-// returns rgb string given value and optional min/max range
-function getColorGradient(value, minVal = 0, maxVal = 100) {
-  if (typeof value !== "number" || isNaN(value)) value = 0;
-  // avoid division by zero
-  if (maxVal === minVal) {
-    // single value → return middle green
-    return "rgb(0,200,0)";
-  }
-  const ratio = Math.min(Math.max((value - minVal) / (maxVal - minVal), 0), 1);
-  const r = Math.round(255 * ratio); // more value => more red
-  const g = Math.round(255 * (1 - ratio)); // more value => less green
-  return `rgb(${r},${g},0)`;
-}
+  taggingData.forEach((row) => {
+    const { kdkec, kddesa, kdsls } = row;
 
-// ---------------------------
-// CREATE SLS LAYER (sets layer._kodeKey)
-// ---------------------------
-function createSLSLayer(filterParams = {}) {
-  return L.geoJSON(geojsonData.sls, {
-    filter: (f) => {
-      const { kdkec, kddesa } = filterParams;
-      const matchKec = !kdkec || f.properties.kdkec === kdkec;
-      const matchDesa = !kddesa || f.properties.kddesa === kddesa;
-      return matchKec && matchDesa;
-    },
-    style: {
-      fillColor: "#fff",
-      weight: 1,
-      color: "black",
-      fillOpacity: 0.7,
-    },
-    onEachFeature: (feature, layer) => {
-      const p = feature.properties || {};
-      const kodeKey = `${p.kdkec}${p.kddesa}${p.kdsls}`;
-      layer._kodeKey = kodeKey;
+    const slsKey = `${kdkec}_${kddesa}_${kdsls}`;
+    const desaKey = `${kdkec}_${kddesa}`;
+    const kecKey = kdkec;
 
-      const d = muatanByKode[kodeKey];
-      let tip = `<b>
-  ${p.nmdesa || "-"}, ${p.nmkec || "-"}<br/>
-  ${p.nmsls || "-"}</b><br/>`;
-      if (d) {
-        tip += `
-  <table style="border-collapse: collapse; font-size: 13px;">
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Status LKM</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${d.statusLKM || "-"}</td>
-    </tr>
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Pengawas</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${d.namapml || "-"}</td>
-    </tr>
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Petugas</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${d.namappl || "-"}</td>
-    </tr>
-  </table>
-`;
-      } else {
-        tip += `Tidak ada data CSV`;
-      }
-      layer.bindTooltip(tip, { sticky: true });
-      let lat = 0,
-        lng = 0;
-      if (feature.geometry) {
-        // Jika tipe Point
-        if (feature.geometry.type === "Point") {
-          lat = feature.geometry.coordinates[1];
-          lng = feature.geometry.coordinates[0];
-        } else {
-          // Untuk tipe Polygon/MultiPolygon, hitung center bounds
-          const layerBounds = layer.getBounds ? layer.getBounds() : null;
-          if (layerBounds) {
-            const center = layerBounds.getCenter();
-            lat = center.lat;
-            lng = center.lng;
-          }
-        }
-      }
+    taggingCache.perSLS[slsKey] ||= [];
+    taggingCache.perDesa[desaKey] ||= [];
+    taggingCache.perKecamatan[kecKey] ||= [];
 
-      const popupContent = `
-  <div>
-    <b>
-    ${p.nmdesa || "-"},${p.nmkec || "-"}<br/>
-    ${p.nmsls || "-"}</b><br/>
-
-    <table style="border-collapse: collapse; font-size: 13px; margin-bottom: 6px;">
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.totalMuatan}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.totalMuatan ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.muatanKK}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.muatanKK ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBTT}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.jumlahBTT ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBTTKosong}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.jumlahBTTKosong ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBKU}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.jumlahBKU ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBBTT}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.jumlahBBTT ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.muatanUsaha}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${d.muatanUsaha ?? "-"}</td>
-      </tr>
-    </table>
-
-    <button class="btnGoogleMaps" data-lat="${lat}" data-lng="${lng}">Lihat di Google Maps</button>
-  </div>
-`;
-
-      layer.bindPopup(popupContent);
-
-            layer.on({
-        mouseover: (e) => {
-          const layer = e.target;
-          layer.setStyle({
-            weight: 3,
-            color: '#3388ff',
-          });
-          // Bawa layer ke depan supaya jelas (opsional)
-          if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-            layer.bringToFront();
-          }
-        },
-        mouseout: (e) => {
-          const layer = e.target;
-          // Kembalikan style semula
-          layer.setStyle({
-            weight: 1,
-            color: "black",
-         });
-        }
-      });
-    },
-  });
-}
-
-// Event handler untuk tombol popup, pasang sekali di map global:
-
-// ---------------------------
-// UPDATE WARNA SLS BERDASARKAN DROPDOWN / LEVEL
-// - Picks field from #kolomWarna
-// - Computes min/max from visible SLS (excluding status 'belum')
-// - Applies: no CSV -> white, status 'belum' -> grey, else gradient
-// ---------------------------
-function updateWarnaSLSBerdasarkanMuatan() {
-  if (!slsLayerGroup || !muatanCSVReady) return;
-
-  const field = document.querySelector("#kolomWarnaBar .warna-item.active")?.dataset.value || "totalMuatan";
-
-  // Collect numeric values from visible SLS layers excluding status 'belum'
-  const values = [];
-  slsLayerGroup.eachLayer((layer) => {
-    const kodeKey = layer._kodeKey;
-    const data = muatanByKode[kodeKey];
-    if (!data) return;
-    const status = (data.statusLKM || "").toString().trim().toLowerCase();
-    if (status === "belum") return; // exclude from scale
-    const v = parseFloat(data[field]);
-    if (!isNaN(v)) values.push(v);
+    taggingCache.perSLS[slsKey].push(row);
+    taggingCache.perDesa[desaKey].push(row);
+    taggingCache.perKecamatan[kecKey].push(row);
   });
 
-  const min = 0;
-  const max = values.length ? Math.max(...values) : min;
+  console.log("✅ Tagging cache selesai dibuat:", taggingCache);
+}
 
-  // apply style per-layer
-  slsLayerGroup.eachLayer((layer) => {
-    const kodeKey = layer._kodeKey;
-    const data = muatanByKode[kodeKey];
+let kategoriMode = "wilkerstat"; // default
 
-    let fillColor = "#fff"; // default white (no CSV)
-    if (!data) {
-      fillColor = "#fff";
-    } else {
-      const status = (data.statusLKM || "").toString().trim().toLowerCase();
-      if (status === "belum") {
-        fillColor = "#cccccc"; // grey for belum
+document.getElementById("toggle-kategori").addEventListener("change", (e) => {
+  kategoriMode = e.target.checked ? "konsentrasi" : "wilkerstat";
+  document.getElementById("label-kategori").textContent =
+    kategoriMode === "konsentrasi" ? "Wilayah Konsentrasi" : "Batas Wilkerstat";
+
+  clearTagging();
+
+  if (kategoriMode === "wilkerstat") {
+    if (currentLevel === "kecamatan") {
+      showTaggingForWilayah(null, null, null, 3, true);
+    } else if (currentLevel === "desa") {
+      showTaggingForWilayah(selectedKecamatan, null, null, 6, true);
+    } else if (currentLevel === "sls") {
+      if (slsZoomed && selectedSLS) {
+        showTaggingForWilayah(
+          selectedKecamatan,
+          selectedDesa,
+          selectedSLS,
+          6,
+          false
+        ); // INDIVIDU
       } else {
-        // try numeric
-        const v = parseFloat(data[field]);
-        if (isNaN(v)) {
-          fillColor = "#fff";
-        } else {
-          fillColor = getColorGradient(v, min, max);
-        }
+        showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8, true); // CLUSTER
       }
     }
-
-    layer.setStyle({
-      fillColor,
-      fillOpacity: currentLevel === "desa" ? 0.2 : 0.9,
-      color: currentLevel === "desa" ? "black" : "rgba(204, 204, 204, 0.3)",
-      weight: 1,
-    });
-  });
-  // Tambahkan legend & label
-  // Legend selalu tampil
-  addDynamicLegend(field, min, max);
-
-  // Label hanya muncul jika level desa
-if ((currentLevel === "desa" || currentLevel === "kec")) {
-  updateSLSLabels(field);
   } else {
-    // hapus semua label jika bukan desa
-    map.eachLayer((layer) => {
-      if (
-        layer instanceof L.Tooltip &&
-        layer.options.className === "sls-label"
-      ) {
-        map.removeLayer(layer);
+    // KONSENTRASI
+    if (currentLevel === "kecamatan") {
+      showKonsentrasiIcons(null, null, null);
+    } else if (currentLevel === "desa") {
+      showKonsentrasiIcons(selectedKecamatan, null, null);
+    } else if (currentLevel === "sls") {
+      if (slsZoomed && selectedSLS) {
+        showKonsentrasiIcons(selectedKecamatan, selectedDesa, selectedSLS); // 1 SLS
+      } else {
+        showKonsentrasiIcons(selectedKecamatan, selectedDesa, null); // Semua SLS di desa
       }
-    });
+    }
   }
-}
-
-// ---------------------------
-// RENDER LEVEL AWAL (kabupaten view)
-// ---------------------------
-function renderLevelAwal(fieldMuatan = "totalMuatan") {
-  currentLevel = "kab";
-  slsLabelLayer.clearLayers();
-  if (currentGeojsonLayer) map.removeLayer(currentGeojsonLayer);
-
-  // create sls layer and save to global variable
-  slsLayerGroup = createSLSLayer({});
-  const desaLayer = L.geoJSON(geojsonData.desa, {
-    style: { color: "#555555", weight: 0.5, fillOpacity: 0 },
-  });
-  const kecLayer = L.geoJSON(geojsonData.kecamatan, {
-    style: { color: "rgba(0,0,0,0.4)", weight: 1, fillOpacity: 0 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(`${feature.properties.nmkec}`);
-      layer.on("click", () => {
-        // zoom to kecamatan level (shows desa + SLS inside)
-        zoomKeKecamatan(feature.properties.kdkec);
-      });
-    },
-  });
-
-  currentGeojsonLayer = L.featureGroup([
-    slsLayerGroup,
-    desaLayer,
-    kecLayer,
-  ]).addTo(map);
-
-  // safe fit bounds
-  const bounds = currentGeojsonLayer.getBounds();
-  if (bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds);
-
-  // apply colors according to dropdown
-  updateWarnaSLSBerdasarkanMuatan();
-  updateNavbar("kab");
-  document.getElementById("filterContainer").style.display = "none";
-}
-
-// ---------------------------
-// ZOOM KE KECAMATAN
-// ---------------------------
-function zoomKeKecamatan(kdkec) {
-  currentLevel = "kec";
-  if (currentGeojsonLayer) map.removeLayer(currentGeojsonLayer);
-
-  // --- Buat SLS layer tapi non-interaktif
-  slsLayerGroup = createSLSLayer({ kdkec });
-
-  // --- Layer kecamatan (garis tebal, di bawah desa)
-  const kecLayer = L.geoJSON(geojsonData.kecamatan, {
-    filter: (f) => f.properties.kdkec === kdkec,
-    style: { color: "black", weight: 2, fillOpacity: 0 },
-  });
-
-  // --- Layer desa (klik aktif)
-  const desaLayer = L.geoJSON(geojsonData.desa, {
-    filter: (f) => f.properties.kdkec === kdkec,
-    style: { color: "black", weight: 0.5, fillOpacity: 0 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(`${feature.properties.nmdesa}`);
-      layer.on("click", () => {
-        zoomKeDesa(feature.properties.kdkec, feature.properties.kddesa);
-      });
-    },
-  });
-
-  // Urutan: SLS → Kecamatan → Desa (desa terakhir supaya klik aktif)
-  currentGeojsonLayer = L.featureGroup([
-    slsLayerGroup,
-    kecLayer,
-    desaLayer,
-  ]).addTo(map);
-
-  // Zoom ke area kecamatan
-  const bounds = currentGeojsonLayer.getBounds();
-  if (bounds && bounds.isValid && bounds.isValid()) {
-    map.fitBounds(bounds);
-  }
-
-  // Update warna SLS
-  updateWarnaSLSBerdasarkanMuatan();
-  updateNavbar("kec", kdkec);
-}
-
-// ---------------------------
-// ZOOM KE DESA
-// ---------------------------
-function zoomKeDesa(kdkec, kddesa) {
-  currentLevel = "desa";
-  if (currentGeojsonLayer) map.removeLayer(currentGeojsonLayer);
-
-  slsLayerGroup = createSLSLayer({ kdkec, kddesa });
-
-  const desaLayer = L.geoJSON(geojsonData.desa, {
-    filter: (f) =>
-      f.properties.kdkec === kdkec && f.properties.kddesa === kddesa,
-    style: { color: "black", weight: 0.5, fillOpacity: 0 },
-    interactive: false,
-  });
-
-  const kecLayer = L.geoJSON(geojsonData.kecamatan, {
-    filter: (f) => f.properties.kdkec === kdkec,
-    style: { color: "black", weight: 1, fillOpacity: 0 },
-    interactive: false,
-  });
-
-  currentGeojsonLayer = L.featureGroup([
-    desaLayer,
-    kecLayer,
-    slsLayerGroup,
-  ]).addTo(map);
-  const bounds = desaLayer.getBounds();
-  if (bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds);
-
-  updateWarnaSLSBerdasarkanMuatan();
-  updateNavbar("desa", kdkec, kddesa);
-}
-
-// ---------------------------
-// RENDER SLS DARI HASIL FILTER PERIKSA
-// ---------------------------
-function renderLevelFilteredSLS(hasilFilter) {
-  if (currentGeojsonLayer) map.removeLayer(currentGeojsonLayer);
-
-  // kec layer for context
-  const kecLayer = L.geoJSON(geojsonData.kecamatan, {
-    style: { color: "black", weight: 1, fillOpacity: 0 },
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(`Kecamatan ${feature.properties.nmkec}`, {
-        permanent: false,
-      });
-    },
-  });
-
-  // build sls layer from filter; ensure _kodeKey set in onEachFeature
-  const slsFilteredLayer = L.geoJSON(hasilFilter, {
-    style: {
-      weight: 1,
-      color: "black",
-      fillOpacity: 0.2,
-    },
-    onEachFeature: (feature, layer) => {
-      const kodeKey = `${feature.properties.kdkec}${feature.properties.kddesa}${feature.properties.kdsls}`;
-      layer._kodeKey = kodeKey;
-
-      const data = muatanByKode[kodeKey] || {};
-      const tooltipContent = `
-    <b>
-    ${data.namaDesa || "-"}, ${data.namaKec || "-"}</br>
-    ${data.namaSLS || "-"}</b><br>
-    <table style="border-collapse: collapse; font-size: 13px;">
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Status LKM</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${data.statusLKM || "-"}</td>
-    </tr>
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Pengawas</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${data.namapml || "-"}</td>
-    </tr>
-    <tr>
-      <td style="width: 80px; text-align: left; white-space: nowrap;">Petugas</td>
-      <td style="width: 10px; text-align: center;">:</td>
-      <td>${data.namappl || "-"}</td>
-    </tr>
-  </table>
-  `;
-      layer.bindTooltip(tooltipContent, { sticky: true });
-
-      // Tambahkan popup dengan tombol:
-      const kdkec = feature.properties.kdkec;
-      const kddesa = feature.properties.kddesa;
-
-      // Dapatkan center dari geometry feature:
-      let lat = 0,
-        lng = 0;
-      if (feature.geometry) {
-        // Jika tipe Point
-        if (feature.geometry.type === "Point") {
-          lat = feature.geometry.coordinates[1];
-          lng = feature.geometry.coordinates[0];
-        } else {
-          // Untuk tipe Polygon/MultiPolygon, hitung center bounds
-          const layerBounds = layer.getBounds ? layer.getBounds() : null;
-          if (layerBounds) {
-            const center = layerBounds.getCenter();
-            lat = center.lat;
-            lng = center.lng;
-          }
-        }
-      }
-
-const popupContent = `
-  <div>
-    <b>
-    ${data.namaDesa || "-"},${data.namaKec || "-"} <br/>
-    ${data.namaSLS || "-"}</b><br/>
-
-    <table style="border-collapse: collapse; font-size: 13px; margin-bottom: 6px;">
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.totalMuatan}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.totalMuatan ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.muatanKK}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.muatanKK ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBTT}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.jumlahBTT ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBTTKosong}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.jumlahBTTKosong ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBKU}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.jumlahBKU ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.jumlahBBTT}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.jumlahBBTT ?? "-"}</td>
-      </tr>
-      <tr>
-        <td style="width: 120px; text-align: left; white-space: nowrap;">${legendLabels.muatanUsaha}</td>
-        <td style="width: 10px; text-align: center;">:</td>
-        <td style="text-align: right;">${data.muatanUsaha ?? "-"}</td>
-      </tr>
-    </table>
-
-    <button class="btnGoogleMaps" data-lat="${lat}" data-lng="${lng}">Lihat di Google Maps</button>
-  </div>
-`;
-      layer.bindPopup(popupContent);
-
-      
-            layer.on({
-        mouseover: (e) => {
-          const layer = e.target;
-          layer.setStyle({
-            weight: 3,
-            color: '#3388ff',
-          });
-          // Bawa layer ke depan supaya jelas (opsional)
-          if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
-            layer.bringToFront();
-          }
-        },
-        mouseout: (e) => {
-          const layer = e.target;
-          // Kembalikan style semula
-          layer.setStyle({
-            weight: 1,
-            color: "black",
-         });
-        }
-      });
-
-      layer.on("click", () => {
-        layer.openPopup();
-      });
-    },
-  });
-
-  // set slsLayerGroup to this filtered set so updateWarna can color them
-  slsLayerGroup = slsFilteredLayer;
-
-  currentGeojsonLayer = L.featureGroup([kecLayer, slsFilteredLayer]).addTo(map);
-  const bounds = currentGeojsonLayer.getBounds();
-  if (bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds);
- currentLevel = "desa";
-  updateWarnaSLSBerdasarkanMuatan();
-}
-
-// ---------------------------
-// PERIKSA MUATAN (search) - cleaned
-// ---------------------------
-document.getElementById("btnLanjutPeriksa").addEventListener("click", () => {
-  periksaMuatan();
 });
 
-const listHasil = document.getElementById("listHasil");
+function showKonsentrasiIcons(kdkec = null, kddesa = null, kdsls = null) {
+  clearTagging();
 
-function periksaMuatan() {
-  const varA = document.getElementById("varA").value;
-  const operator = document.getElementById("operator").value;
-  const angkakali = parseFloat(document.getElementById("angkakali").value) || 1;
-  const angka1 = parseFloat(document.getElementById("angka1").value);
-  const angka2Key = document.getElementById("angka2Select").value;
+  let taggingFiltered = [];
 
-  if (!varA || !operator) {
-    alert("Kolom dan operator harus dipilih.");
+  // Ambil dari cache, bukan filter ulang
+  if (kdkec && kddesa && kdsls) {
+    taggingFiltered = taggingCache.perSLS[`${kdkec}_${kddesa}_${kdsls}`] || [];
+  } else if (kdkec && kddesa) {
+    taggingFiltered = taggingCache.perDesa[`${kdkec}_${kddesa}`] || [];
+  } else if (kdkec) {
+    taggingFiltered = taggingCache.perKecamatan[kdkec] || [];
+  } else {
+    taggingFiltered = taggingData;
+  }
+
+  const landmarkCounts = countLandmarks(taggingFiltered);
+  updateLandmarkCountDisplay(landmarkCounts);
+
+  const kategori = [
+    "Mall",
+    "Pertokoan",
+    "Pasar",
+    "Gedung Perkantoran",
+    "Kawasan Industri/Sentra Industri",
+    "Tempat Rekreasi",
+    "Pelabuhan",
+    "Bandara",
+    "Terminal",
+    "Stasiun",
+  ];
+
+  taggingFiltered
+    .filter((t) => kategori.includes(t.tipe_landmark))
+    .forEach((t) => {
+      if (!isNaN(t.lat) && !isNaN(t.lng)) {
+        // Hitung apakah titik nyasar terhadap poligon SLS yang sesuai
+        let isNyasar = false;
+        const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+        const geom = slsIndex[key];
+
+        const jenis = ikonLandmark[t.tipe_landmark] || {
+          icon: "❓",
+          color: "#999",
+        };
+        const icon = L.divIcon({
+          html: `<div style="font-size: 18px; color: ${jenis.color}; text-align: center;">${jenis.icon}</div>`,
+          className: "tipe-landmark-icon",
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
+
+        const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
+          `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
+        );
+
+        slsMarkerLayer.addLayer(marker);
+      }
+    });
+
+  map.addLayer(slsMarkerLayer);
+}
+
+function clearMap() {
+  Object.values(layers).forEach((l) => l && map.removeLayer(l));
+}
+function clearTagging() {
+  slsMarkerLayer.clearLayers();
+
+  if (map.hasLayer(manualClusterLayer)) {
+    map.removeLayer(manualClusterLayer);
+  }
+
+  map.eachLayer((layer) => {
+    if (
+      layer instanceof L.Marker &&
+      layer.options.icon &&
+      layer.options.icon.options.className === "custom-cluster-icon"
+    ) {
+      map.removeLayer(layer);
+    }
+  });
+}
+
+const ikonLandmark = {
+  "Batas SLS": { icon: "🔴", color: "#ff9800" },
+  "Batas Segmen": { icon: "⚪", color: "#ff9800" },
+  Mall: { icon: "🏬", color: "#ff9800" },
+  Pertokoan: { icon: "🏪", color: "#9c27b0" },
+  Pasar: { icon: "🛒", color: "#f44336" },
+  "Gedung Perkantoran": { icon: "🏢", color: "#ff9800" },
+  "Kawasan Industri/Sentra Industri": { icon: "🏭", color: "#9c27b0" },
+  "Tempat Rekreasi": { icon: "🎡", color: "#f44336" },
+  Pelabuhan: { icon: "🚢", color: "#ff9800" },
+  Bandara: { icon: "✈️", color: "#9c27b0" },
+  Terminal: { icon: "🚌", color: "#f44336" },
+  Stasiun: { icon: "🚆", color: "#f44336" },
+};
+function showKecamatan() {
+  clearMap();
+  clearTagging();
+  nyasarLineLayer.clearLayers();
+  selectedSLSHighlightLayer.clearLayers();
+  currentLevel = "kecamatan";
+  updateLegend(geojsonData.kecamatan.features, "kdkec", "nmkec");
+
+  layers.kecamatan = L.geoJSON(geojsonData.kecamatan, {
+    style: { color: "#1e1affff", weight: 1, fillOpacity: 0.2 },
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmkec, { sticky: true });
+      layer.on({
+        click: () => {
+          selectedKecamatan = feature.properties.kdkec;
+          selectedDesa = null;
+          showDesa();
+        },
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer),
+      });
+    },
+  }).addTo(map);
+
+  map.fitBounds(layers.kecamatan.getBounds(), {
+    paddingTopLeft: [0, 0],
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+  });
+
+  if (kategoriMode === "wilkerstat") {
+    showTaggingForWilayah(null, null, null, 3, true); // hanya batas
+  } else {
+    showKonsentrasiIcons(null, null, null); // ikon langsung
+  }
+  setNav(); // default semua wilayah
+}
+function showDesa() {
+  clearMap();
+  clearTagging();
+  nyasarLineLayer.clearLayers();
+  selectedSLSHighlightLayer.clearLayers();
+  currentLevel = "desa";
+  const filtered = geojsonData.desa.features.filter(
+    (f) => f.properties.kdkec === selectedKecamatan
+  );
+  updateLegend(filtered, "kddesa", "nmdesa");
+
+  layers.desa = L.geoJSON(
+    { type: "FeatureCollection", features: filtered },
+    {
+      style: { color: "#2a9d8f", weight: 1, fillOpacity: 0.3 },
+      onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.nmdesa, { sticky: true });
+        layer.on({
+          click: () => {
+            selectedDesa = feature.properties.kddesa;
+            selectedSLS = null;
+            showSLS();
+          },
+          mouseover: () => highlightFeature(layer),
+          mouseout: () => resetHighlight(layer),
+        });
+      },
+    }
+  ).addTo(map);
+
+  map.fitBounds(layers.desa.getBounds(), {
+    paddingTopLeft: [0, 0],
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+  });
+  if (kategoriMode === "wilkerstat") {
+    showTaggingForWilayah(selectedKecamatan, null, null, 6, true); // hanya batas
+  } else {
+    showKonsentrasiIcons(selectedKecamatan, null, null); // ikon langsung
+  }
+  setNav("kecamatan", {
+    nmkec: getNamaKecamatan(selectedKecamatan),
+  });
+}
+
+function showSLS() {
+  clearMap();
+  clearTagging();
+  nyasarLineLayer.clearLayers();
+  selectedSLSHighlightLayer.clearLayers();
+  currentLevel = "sls";
+  const filtered = geojsonData.sls.features.filter(
+    (f) =>
+      f.properties.kdkec === selectedKecamatan &&
+      f.properties.kddesa === selectedDesa
+  );
+  updateLegend(filtered, "kdsls", "nmsls");
+
+layers.sls = L.geoJSON(
+  { type: "FeatureCollection", features: filtered },
+  {
+    style: { color: "#e76f51", weight: 2, fillOpacity: 0 },
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(feature.properties.nmsls, { sticky: true });
+
+      layer.on({
+        click: () => {
+          selectedSLS = feature.properties.kdsls;
+          slsZoomed = true;
+
+          selectedSLSHighlightLayer.clearLayers();
+
+          if (feature?.geometry) {
+            selectedSLSHighlightLayer.addData(feature);
+          }
+
+          map.fitBounds(layer.getBounds(), {
+            paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+          });
+
+          showTaggingForWilayah(
+            selectedKecamatan,
+            selectedDesa,
+            selectedSLS,
+            6,
+            false
+          );
+          // 🔹 Update navigasi
+          setNav("sls", {
+            nmkec: getNamaKecamatan(selectedKecamatan),
+            nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+            nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS),
+          });
+        },
+
+        mouseover: () => highlightFeature(layer),
+        mouseout: () => resetHighlight(layer),
+      });
+    },
+  }
+).addTo(map);
+
+  map.fitBounds(layers.sls.getBounds(), {
+    paddingTopLeft: [0, 0],
+    paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+  });
+  if (kategoriMode === "wilkerstat") {
+    showTaggingForWilayah(selectedKecamatan, selectedDesa, null, 8, true); // hanya batas
+  } else {
+    showKonsentrasiIcons(selectedKecamatan, selectedDesa, null); // ikon langsung
+  }
+  setNav("desa", {
+    nmkec: getNamaKecamatan(selectedKecamatan),
+    nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+  });
+}
+
+function showTaggingForWilayah(
+  kdkec = null,
+  kddesa = null,
+  kdsls = null,
+  radius = 5,
+  useCluster = true
+) {
+  clearTagging();
+  const filteredTagging = taggingCache.filter(
+    (t) =>
+      (!kdkec || t.kdkec === kdkec) &&
+      (!kddesa || t.kddesa === kddesa) &&
+      (!kdsls || t.kdsls === kdsls)
+  );
+
+  manualClusterLayer.clearLayers();
+  // Bangun indeks poligon SLS hanya sekali
+  if (
+    Object.keys(slsIndex).length === 0 &&
+    layers.sls &&
+    layers.sls.eachLayer
+  ) {
+    layers.sls.eachLayer((l) => {
+      const prop = l.feature?.properties;
+      const geom = l.feature?.geometry;
+      if (prop && geom && geom.coordinates?.length) {
+        const key = `${prop.kdkec}-${prop.kddesa}-${prop.kdsls}`;
+        slsIndex[key] = geom;
+      }
+    });
+  }
+
+  // Zoom ke satu SLS, tampilkan titik individu + label
+  if (!useCluster) {
+    slsMarkerLayer.clearLayers();
+    nyasarLineLayer.clearLayers();
+    filteredTagging.forEach((t) => {
+      if (!isNaN(t.lat) && !isNaN(t.lng)) {
+        const jenis = ikonLandmark[t.tipe_landmark] || {
+          icon: "❓",
+          color: "#999",
+        };
+        const extraStyle = t.isNyasar
+          ? `
+  border: 2px solid gold;
+  background-color: rgba(255, 255, 100, 0.8);
+  border-radius: 50%;
+  font-weight: bold;
+`
+          : "";
+        const icon = L.divIcon({
+          html: `
+  <div style="
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: ${t.isNyasar ? "#000" : jenis.color};
+    background-color: ${t.isNyasar ? "rgba(255, 255, 100, 0.8)" : "transparent"};
+    border: ${t.isNyasar ? "2px solid gold" : "none"};
+    border-radius: 50%;
+    font-weight: bold;
+  ">${jenis.icon}</div>
+`,
+          className: "tipe-landmark-icon",
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        const marker = L.marker([t.lat, t.lng], { icon }).bindPopup(
+          `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Jenis: ${t.tipe_landmark}`
+        );
+
+        // Buat tooltip
+        const tooltip = L.tooltip({
+          permanent: true,
+          direction: "bottom",
+          offset: [0, 14],
+          className: "tagging-label",
+        }).setContent(t.nama || "Tanpa Nama");
+
+        marker.bindTooltip(tooltip);
+
+        // Tambahkan toggle saat diklik
+        let tooltipVisible = true;
+        marker.on("click", () => {
+          if (tooltipVisible) {
+            marker.unbindTooltip();
+          } else {
+            marker.bindTooltip(tooltip);
+          }
+          tooltipVisible = !tooltipVisible;
+        });
+
+        // Jika nyasar, tambahkan garis dan tooltip jarak
+        if (
+          t.isNyasar &&
+          t.jarakKeBatas &&
+          slsIndex[`${t.kdkec}-${t.kddesa}-${t.kdsls}`]
+        ) {
+          const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+          const geom = slsIndex[key];
+
+          let polygon;
+          if (geom.type === "Polygon") {
+            polygon = turf.polygon(geom.coordinates);
+          } else if (geom.type === "MultiPolygon") {
+            polygon = turf.multiPolygon(geom.coordinates);
+          }
+
+          if (polygon) {
+            const garisPoligon = turf.polygonToLine(polygon);
+            const turfPoint = turf.point([
+              parseFloat(t.lng),
+              parseFloat(t.lat),
+            ]);
+            const nearest = turf.nearestPointOnLine(garisPoligon, turfPoint);
+
+            // Ganti tooltip dengan info jarak
+            marker.unbindTooltip();
+            marker.bindTooltip(
+`<div style="background: rgba(255, 255, 204, 0.5); padding: 4px 6px; border-radius: 4px;">
+  <strong>${t.nama}</strong><br>
+  ${t.jarakKeBatas.toFixed(1)} m dari batas<br>
+  <em style="color: #555;">(cek apakah batas SLS <br> berubah ke sini)</em>
+</div>`,
+              {
+                permanent: true,
+                direction: "bottom",
+                offset: [0, 14],
+                className: "tagging-label",
+              }
+            );
+
+            // Tambahkan garis ke layer
+            const garis = L.polyline(
+              [
+                [t.lat, t.lng],
+                [
+                  nearest.geometry.coordinates[1],
+                  nearest.geometry.coordinates[0],
+                ],
+              ],
+              {
+                color: "gold",
+                weight: 2,
+                dashArray: "4,4",
+              }
+            );
+            nyasarLineLayer.addLayer(garis);
+          }
+        }
+
+        slsMarkerLayer.addLayer(marker);
+      }
+    });
+
+    map.addLayer(slsMarkerLayer);
+    map.addLayer(nyasarLineLayer);
+
     return;
   }
 
-  const hasilFilter = geojsonData.sls.features.filter((feature) => {
-    const props = feature.properties;
-    const kode = `${props.kdkec}${props.kddesa}${props.kdsls}`;
-    const muatan = muatanByKode[kode];
-    if (!muatan) return false;
-    // status must be 'Selesai' (case-insensitive)
-    const status = (muatan.statusLKM || "").toString().trim().toLowerCase();
-    if (status !== "selesai") return false;
+  // Cluster manual berdasarkan kode wilayah
+  const groupByCode = {};
+  filteredTagging.forEach((t) => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      let kode =
+        currentLevel === "kecamatan"
+          ? t.kdkec
+          : currentLevel === "desa"
+            ? t.kddesa
+            : currentLevel === "sls"
+              ? t.kdsls
+              : "all";
 
-    const a = parseFloat(muatan[varA]);
-    const b = angka2Key ? parseFloat(muatan[angka2Key]) : angka1;
-
-    if (isNaN(a) || isNaN(b)) return false;
-    const pembanding = angkakali * b;
-
-    switch (operator) {
-      case "=":
-        return a === pembanding;
-      case ">":
-        return a > pembanding;
-      case "<":
-        return a < pembanding;
-      case ">=":
-        return a >= pembanding;
-      case "<=":
-        return a <= pembanding;
-      case "!=":
-        return a !== pembanding;
-      default:
-        return false;
+      if (!groupByCode[kode]) groupByCode[kode] = [];
+      groupByCode[kode].push(t);
     }
   });
 
-  // render resulting SLS features
-  renderLevelFilteredSLS({
-    type: "FeatureCollection",
-    features: hasilFilter,
+  // === [1] Preprocess Indexing Layer SLS ===
+  const slsLayerGroup = layers["sls"];
+
+  if (slsLayerGroup) {
+    slsLayerGroup.eachLayer((l) => {
+      const props = l.feature?.properties;
+      const geom = l.feature?.geometry;
+      if (!props || !geom) return;
+
+      const key = `${props.kdkec}-${props.kddesa}-${props.kdsls}`;
+      slsIndex[key] = geom;
+    });
+  }
+
+  // === [2] Tandai isNyasar untuk tiap titik tagging ===
+
+  // === [2] Tandai isNyasar untuk tiap titik tagging (diproses 1x per titik) ===
+  filteredTagging.forEach((t) => {
+    if (t._checkedNyasar) return;
+    if (t.tipe_landmark !== "Batas SLS") {
+      t.isNyasar = false; // bukan titik yang perlu dicek nyasar
+      return;
+    }
+    if (t.rubahbatas == "Berubah") {
+      t.isNyasar = false; // bukan titik yang perlu dicek nyasar
+      return;
+    }
+    if (!t.lat || !t.lng || !t.kdkec || !t.kddesa || !t.kdsls) return;
+
+    const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+    const geom = slsIndex[key];
+    if (!geom) return;
+
+    try {
+      const turfPoint = turf.point([parseFloat(t.lng), parseFloat(t.lat)]);
+      let polygon = null;
+
+      if (geom.type === "Polygon") {
+        polygon = turf.polygon(geom.coordinates);
+      } else if (geom.type === "MultiPolygon") {
+        polygon = turf.multiPolygon(geom.coordinates);
+      }
+
+      if (polygon) {
+        const nearest = turf.nearestPointOnLine(
+          turf.polygonToLine(polygon),
+          turfPoint
+        );
+        const dist = turf.distance(turfPoint, nearest, { units: "meters" });
+        t.jarakKeBatas = dist;
+        t.isNyasar = dist > 20;
+      } else {
+        t.isNyasar = false;
+      }
+    } catch (e) {
+      t.isNyasar = false;
+      console.warn("Gagal menghitung nyasar untuk titik:", t, e);
+    }
+
+    t._checkedNyasar = true;
   });
 
-  // info
-  const varAName = varA.replace(/([A-Z])/g, " $1");
-  const rumus = `${varAName} ${operator} ${angkakali} × (${
-    angka2Key || angka1
-  })`;
-  document.getElementById("infoFilter").innerHTML = `<b>Kondisi:</b> ${rumus}`;
-  // list results
-  renderListHasil(hasilFilter);
-  document.getElementById("filterContainer").style.display = "block";
+  console.log(
+    "Jumlah titik nyasar:",
+    filteredTagging.filter((t) => t.isNyasar).length
+  );
+
+  Object.entries(groupByCode).forEach(([kode, titikList]) => {
+    const group = L.featureGroup();
+
+    titikList.forEach((t) => {
+      const marker = L.marker([t.lat, t.lng]).bindPopup(`${t.nama}`);
+      group.addLayer(marker);
+    });
+    map.addLayer(manualClusterLayer);
+
+    // Cari layer poligon berdasarkan kode dan level
+    let layerGroup = layers[currentLevel];
+    let matchedLayer = null;
+    if (layerGroup && layerGroup.eachLayer) {
+      layerGroup.eachLayer((l) => {
+        const prop = l.feature?.properties;
+        if (prop) {
+          const matchKode =
+            (currentLevel === "kecamatan" && prop.kdkec === kode) ||
+            (currentLevel === "desa" && prop.kddesa === kode) ||
+            (currentLevel === "sls" && prop.kdsls === kode);
+          if (matchKode) matchedLayer = l;
+        }
+      });
+    }
+
+    let center;
+
+    if (matchedLayer) {
+      const polygon = matchedLayer.feature;
+      if (polygon && polygon.geometry) {
+        const point = turf.pointOnFeature(polygon);
+        center = L.latLng(
+          point.geometry.coordinates[1],
+          point.geometry.coordinates[0]
+        );
+      } else {
+        center = matchedLayer.getBounds().getCenter();
+      }
+    } else {
+      // fallback: gunakan center dari titik tagging
+      const bounds = group.getBounds();
+      if (!bounds.isValid()) return;
+      center = bounds.getCenter();
+    }
+    const taggingFiltered = taggingData.filter(
+      (t) =>
+        (!kdkec || t.kdkec === kdkec) &&
+        (!kddesa || t.kddesa === kddesa) &&
+        (!kdsls || t.kdsls === kdsls)
+    );
+
+    const landmarkCounts = countLandmarks(taggingFiltered);
+    updateLandmarkCountDisplay(landmarkCounts);
+
+    function isKonsentrasiEkonomi(tipe) {
+      const list = [
+        "Mall",
+        "Pasar",
+        "Pertokoan",
+        "Gedung Perkantoran",
+        "Kawasan Industri/Sentra Industri",
+        "Tempat Rekreasi",
+        "Pelabuhan",
+        "Bandara",
+        "Terminal",
+        "Stasiun",
+      ];
+      return list.includes(tipe);
+    }
+
+    const namaWilayah =
+      currentLevel === "kecamatan"
+        ? `[${matchedLayer?.feature?.properties?.kdkec}] ${matchedLayer?.feature?.properties?.nmkec}`
+        : currentLevel === "desa"
+          ? `[${matchedLayer?.feature?.properties?.kddesa}] ${matchedLayer?.feature?.properties?.nmdesa}`
+          : `[${matchedLayer?.feature?.properties?.kdsls}] ${matchedLayer?.feature?.properties?.nmsls}` ||
+            "";
+
+    const jumlahBatasSLS = titikList.filter(
+      (t) => t.tipe_landmark === "Batas SLS"
+    ).length;
+    const jumlahBatasSegmen = titikList.filter(
+      (t) => t.tipe_landmark === "Batas Segmen"
+    ).length;
+    const jumlahEkonomi = titikList.filter((t) =>
+      isKonsentrasiEkonomi(t.tipe_landmark)
+    ).length;
+    const jumlahNyasar = titikList.filter((t) => t.isNyasar).length;
+
+    const nyasarLabelHTML =
+      jumlahNyasar > 0
+        ? `<div class="cluster-label">
+       <span class="nyasar-label has-nyasar">⚠️${jumlahNyasar} > 20m dari batas </span>
+     </div>`
+        : "";
+
+    const slsKurangEmpat = new Set();
+    const titikPerSLS = {};
+
+    titikList.forEach((t) => {
+      const key = `${t.kdkec}-${t.kddesa}-${t.kdsls}`;
+      if (!titikPerSLS[key]) titikPerSLS[key] = 0;
+      titikPerSLS[key]++;
+    });
+
+    for (const key in titikPerSLS) {
+      if (titikPerSLS[key] < 4) slsKurangEmpat.add(key);
+    }
+
+    const slsKurangEmpatLabelHTML =
+      slsKurangEmpat.size > 0
+        ? `<div class="cluster-label">
+       <span class="nyasar-label taggingkurang">❗ ${slsKurangEmpat.size} SLS < 4 titik</span>
+     </div>`
+        : "";
+
+    const manualCluster = L.marker(center, {
+      icon: L.divIcon({
+        html: `
+      <div class="cluster-box">
+        <span class="sls-count">${jumlahBatasSLS}</span> /
+        <span class="segmen-count">${jumlahBatasSegmen}</span> /
+        <span class="konsentrasi-count">${jumlahEkonomi}</span>
+      </div>
+      ${nyasarLabelHTML}
+      ${slsKurangEmpatLabelHTML}
+      <div class="cluster-label"><b>${namaWilayah}</b></div>
+    `,
+        className: "",
+        iconSize: [100, 40],
+      }),
+    });
+
+    manualCluster.bindTooltip(
+      `<div>${namaWilayah}</div>Batas SLS: ${jumlahBatasSLS}<br>Batas Segmen: ${jumlahBatasSegmen}<br>Wilayah Konsentrasi: ${jumlahEkonomi}`,
+      { direction: "top", permanent: false, className: "cluster-tooltip" }
+    );
+
+    manualCluster.on("click", () => {
+      selectedSLSHighlightLayer.clearLayers(); // Hapus highlight sebelumnya
+
+      if (matchedLayer?.feature?.geometry) {
+        selectedSLSHighlightLayer.addData(matchedLayer.feature);
+      }
+      if (currentLevel === "kecamatan") {
+        selectedKecamatan = kode;
+        selectedDesa = null; // reset desa
+        selectedSLS = null; // reset sls
+        showDesa();
+      } else if (currentLevel === "desa") {
+        selectedDesa = kode;
+        selectedSLS = null; // reset sls
+        showSLS();
+      } else if (currentLevel === "sls") {
+        selectedSLS = kode;
+        slsZoomed = true;
+        setNav("sls", {
+          nmkec: getNamaKecamatan(selectedKecamatan),
+          nmdesa: getNamaDesa(selectedKecamatan, selectedDesa),
+          nmsls: getNamaSLS(selectedKecamatan, selectedDesa, selectedSLS),
+        });
+        showTaggingForWilayah(
+          selectedKecamatan,
+          selectedDesa,
+          selectedSLS,
+          6,
+          false
+        );
+
+        // Zoom ke poligon SLS yang sesuai
+        const slsLayerGroup = layers["sls"];
+        if (slsLayerGroup && slsLayerGroup.eachLayer) {
+          slsLayerGroup.eachLayer((l) => {
+            const prop = l.feature?.properties;
+            if (prop?.kdsls === kode) {
+              map.fitBounds(l.getBounds());
+            }
+          });
+        }
+      }
+    });
+
+    manualClusterLayer.addLayer(manualCluster);
+  });
 }
 
-// helper to render the list of hits
-function renderListHasil(features) {
-  const list = document.getElementById("listHasil");
+function highlightFeature(layer) {
+  layer.setStyle({ weight: 3, color: "#2196f3", fillOpacity: 0.6 });
+  layer.bringToFront();
+}
+function resetHighlight(layer) {
+  const style =
+    currentLevel === "kecamatan"
+      ? { color: "#1e1affff", weight: 1, fillOpacity: 0.2 }
+      : currentLevel === "desa"
+        ? { color: "#2a9d8f", weight: 1, fillOpacity: 0.3 }
+        : { color: "#e76f51", weight: 2, fillOpacity: 0 };
+  layer.setStyle(style);
+}
+function findLayerByFeature(feature) {
+  const group = layers[currentLevel];
+  let found = null;
+  if (group && group.eachLayer) {
+    group.eachLayer((layer) => {
+      if (
+        JSON.stringify(layer.feature.properties) ===
+        JSON.stringify(feature.properties)
+      ) {
+        found = layer;
+      }
+    });
+  }
+  return found;
+}
+function updateLegend(features, codeProp, nameProp) {
+  const list = document.getElementById("legend-list");
   list.innerHTML = "";
 
-  // header
-  const header = document.createElement("div");
-  header.className = "listRow header";
-  header.innerHTML = `
-    <div class="cell">#</div>
-    <div class="cell">Kecamatan</div>
-    <div class="cell">Desa</div>
-    <div class="cell">Nama SLS</div>
-    <div class="cell">Muatan</div>
-    <div class="cell">KK</div>
-    <div class="cell">BTT</div>
-    <div class="cell">BTTK</div>
-    <div class="cell">BKU</div>
-    <div class="cell">BBTT NU</div>
-    <div class="cell">Usaha</div>
-  `;
-  list.appendChild(header);
+  features
+    .sort((a, b) =>
+      a.properties[codeProp].localeCompare(b.properties[codeProp])
+    )
+    .forEach((f) => {
+      const li = document.createElement("li");
+      li.className = "legend-item";
+      li.textContent = `(${f.properties[codeProp]}) ${f.properties[nameProp]}`;
 
-  features.forEach((f, i) => {
-    const kode = `${f.properties.kdkec}${f.properties.kddesa}${f.properties.kdsls}`;
-    const muatan = muatanByKode[kode];
-    if (!muatan) return;
+      li.addEventListener("mouseenter", () => {
+        const layer = findLayerByFeature(f);
+        if (layer) highlightFeature(layer);
+      });
 
-    const item = document.createElement("li");
-    item.innerHTML = `
-      <div class="listRow clickable">
-        <div class="cell">${i + 1}</div>
-        <div class="cell">${muatan.namaKec}</div>
-        <div class="cell">${muatan.namaDesa}</div>
-        <div class="cell">${muatan.namaSLS}</div>
-        <div class="cell">${muatan.totalMuatan}</div>
-        <div class="cell">${muatan.muatanKK}</div>
-        <div class="cell">${muatan.jumlahBTT}</div>
-        <div class="cell">${muatan.jumlahBTTKosong}</div>
-        <div class="cell">${muatan.jumlahBKU}</div>
-        <div class="cell">${muatan.jumlahBBTT}</div>
-        <div class="cell">${muatan.muatanUsaha}</div>
-      </div>
-    `;
-    item.querySelector(".listRow").addEventListener("click", (e) => {
-      e.preventDefault();
-      const bounds = L.geoJSON(f).getBounds();
-      if (bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds);
+      li.addEventListener("mouseleave", () => {
+        const layer = findLayerByFeature(f);
+        if (layer) resetHighlight(layer);
+      });
+
+      li.addEventListener("click", () => {
+        if (currentLevel === "kecamatan") {
+          selectedKecamatan = f.properties.kdkec;
+          showDesa();
+        } else if (currentLevel === "desa") {
+          selectedDesa = f.properties.kddesa;
+          showSLS();
+        } else if (currentLevel === "sls") {
+          selectedSLSHighlightLayer.clearLayers();
+          selectedSLS = f.properties.kdsls;
+          const layer = findLayerByFeature(f);
+          if (layer) {
+            map.fitBounds(layer.getBounds(), { paddingBottomRight: [300, 0] });
+            showTaggingForWilayah(
+              selectedKecamatan,
+              selectedDesa,
+              selectedSLS,
+              6,
+              false
+            );
+            selectedSLSHighlightLayer.addData(layer.toGeoJSON());
+          }
+        }
+      });
+
+      list.appendChild(li);
     });
+}
 
-    list.appendChild(item);
+document.getElementById("back-btn").addEventListener("click", () => {
+  if (currentLevel === "sls") {
+    if (slsZoomed) {
+      slsZoomed = false;
+      selectedSLS = null;
+      showSLS();
+    } else {
+      selectedSLS = null;
+      showDesa();
+    }
+  } else if (currentLevel === "desa") {
+    selectedDesa = null;
+    showKecamatan();
+  }
+});
+
+document.getElementById("mode-select").addEventListener("change", (e) => {
+  mode = e.target.value;
+  document.getElementById("petugas-panel").style.display =
+    mode === "petugas" ? "block" : "none";
+  document.getElementById("back-btn").style.display =
+    mode === "petugas" ? "none" : "block";
+  document.getElementById("legend-list").style.display =
+    mode === "petugas" ? "none" : "block";
+  clearMap();
+  clearTagging();
+  clearPML();
+  if (mode === "wilayah") {
+    if (currentLevel === "kecamatan") showKecamatan();
+    else if (currentLevel === "desa") showDesa();
+    else if (currentLevel === "sls") showSLS();
+  }
+  if (mode === "petugas") {
+    showKecamatan();
+    clearTagging();
+  }
+});
+
+function populatePetugasDatalist() {
+  const pmlSet = new Set();
+  const pplSet = new Set();
+
+  taggingData.forEach((t) => {
+    if (t.PML) pmlSet.add(t.PML);
+    if (t.PPL) pplSet.add(t.PPL);
   });
 
-  document.getElementById(
-    "infoFilter"
-  ).innerHTML += `<br><span style="color: #007bff;">Ditemukan ${features.length} SLS</span>`;
+  const pmlList = document.getElementById("pml-list");
+  const pplList = document.getElementById("ppl-list");
+
+  pmlList.innerHTML = "";
+  pplList.innerHTML = "";
+
+  [...pmlSet].sort().forEach((pml) => {
+    const opt = document.createElement("option");
+    opt.value = pml;
+    pmlList.appendChild(opt);
+  });
+
+  [...pplSet].sort().forEach((ppl) => {
+    const opt = document.createElement("option");
+    opt.value = ppl;
+    pplList.appendChild(opt);
+  });
 }
 
-// reset handler
-document.getElementById("btnReset").addEventListener("click", () => {
-  document.getElementById("varA").value = "";
-  document.getElementById("operator").value = "=";
-  document.getElementById("angkakali").value = 1;
-  document.getElementById("angka1").value = "";
-  document.getElementById("angka2Select").value = "";
+function showTaggingFiltered(filterFn, radius = 5) {
+  clearTagging();
 
-  document.getElementById("infoFilter").innerHTML = "";
-  document.getElementById("listHasil").innerHTML = "";
+  const filtered = taggingData.filter(filterFn);
 
-  renderLevelAwal();
-});
-// ---------------------------
-// INITIAL RENDER WHEN DATA READY
-// ---------------------------
-// renderLevelAwal is called when both CSV and GEOJSON ready (see parser & loader above)
+  filtered.forEach((t) => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      // Marker titik tagging
+      const marker = L.circleMarker([t.lat, t.lng], {
+        radius,
+        color: "#ff5722",
+        fillOpacity: 0.8,
+      }).bindPopup(
+        `<b>${t.nama}</b><br>PPL: ${t.PPL}<br>PML: ${t.PML}<br>Kode SLS: ${t.kdsls}`
+      );
+      slsMarkerLayer.addLayer(marker);
 
-// End of script
-
-let legendControl;
-
-function addDynamicLegend(field, min, max) {
-  const legendTitle = legendLabels[field] || field;
-  if (legendControl) {
-    map.removeControl(legendControl);
-  }
-
-  legendControl = L.control({ position: "bottomleft" });
-
-  legendControl.onAdd = function () {
-    const div = L.DomUtil.create("div", "legend");
-    div.innerHTML = `<h4>${legendTitle}</h4>`;
-    const grades = 8; // jumlah step legend
-    for (let i = 0; i <= grades; i++) {
-      const val = min + (i * (max - min)) / grades;
-      const color = getColorGradient(val, min, max);
-      div.innerHTML += `
-        <i style="background:${color}"></i>
-        ${val.toFixed(0)}${
-        i < grades
-          ? "&ndash;" + (min + ((i + 1) * (max - min)) / grades).toFixed(0)
-          : "+"
-      }<br>
-      `;
+      // Label kode SLS (tampil di atas marker)
+      const label = L.marker([t.lat, t.lng], {
+        icon: L.divIcon({
+          className: "tagging-label",
+          html: t.kdsls,
+          iconSize: [30, 15],
+          iconAnchor: [30, 30],
+        }),
+        interactive: false, // agar tidak mengganggu klik marker
+      });
+      slsMarkerLayer.addLayer(label);
     }
-    div.innerHTML += `<i style="background:#ccc"></i> Status LKM Belum`;
-    return div;
+  });
+
+  map.addLayer(slsMarkerLayer);
+
+  // Tampilkan poligon SLS terfilter
+  showSLSForPetugas(filtered);
+
+  // Zoom ke wilayah tagging hasil filter
+  const latlngs = [];
+  filtered.forEach((t) => {
+    if (!isNaN(t.lat) && !isNaN(t.lng)) {
+      latlngs.push([t.lat, t.lng]);
+    }
+  });
+
+  if (latlngs.length > 0) {
+    const bounds = L.latLngBounds(latlngs);
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }
+}
+
+function setNav(level, data = {}) {
+  const nav = document.getElementById("simple-nav");
+
+  const semua = `<span onclick="showKecamatan()">KAB BOYOLALI</span>`;
+  const kec = `<span onclick="showDesa()">[${selectedKecamatan || "??"}] ${data.nmkec || "Kecamatan"}</span>`;
+  const desa = `<span onclick="showSLS()">[${selectedDesa || "??"}] ${data.nmdesa || "Desa"}</span>`;
+  const sls = `[${selectedSLS || "??"}] ${data.nmsls || ""}`; // hanya teks, tidak bisa diklik
+
+  if (level === "kecamatan") {
+    nav.innerHTML = `${semua} › ${kec}`;
+  } else if (level === "desa") {
+    nav.innerHTML = `${semua} › ${kec} › ${desa}`;
+  } else if (level === "sls") {
+    nav.innerHTML = `${semua} › ${kec} › ${desa} › ${sls}`;
+  } else {
+    nav.innerHTML = semua;
+  }
+}
+
+function getNamaKecamatan(kdkec) {
+  const f = geojsonData.kecamatan.features.find(
+    (f) => f.properties.kdkec === kdkec
+  );
+  return f ? f.properties.nmkec : "";
+}
+
+function getNamaDesa(kdkec, kddesa) {
+  const desa = geojsonData.desa.features.find(
+    (f) => f.properties.kdkec === kdkec && f.properties.kddesa === kddesa
+  );
+  return desa ? desa.properties.nmdesa : "";
+}
+
+function getNamaSLS(kdkec, kddesa, kdsls) {
+  const sls = geojsonData.sls.features.find(
+    (f) =>
+      f.properties.kdkec === kdkec &&
+      f.properties.kddesa === kddesa &&
+      f.properties.kdsls === kdsls
+  );
+  return sls ? sls.properties.nmsls : "";
+}
+
+function showSpinner() {
+  document.getElementById("loading-spinner").classList.remove("hidden");
+}
+
+function hideSpinner() {
+  document.getElementById("loading-spinner").classList.add("hidden");
+}
+
+const btnExport = document.getElementById("btn-export-nyasar");
+const popupExport = document.getElementById("popup-export");
+const closePopup = document.getElementById("close-popup");
+
+btnExport.addEventListener("click", () => {
+  popupExport.classList.toggle("show");
+  populateKecamatanDropdown();
+  populateDesaDropdown();
+});
+
+closePopup.addEventListener("click", () => {
+  popupExport.classList.remove("show");
+});
+
+// Populate Kecamatan Dropdown
+function populateKecamatanDropdown() {
+  const select = document.getElementById("filter-kec");
+  select.innerHTML = `<option value="">Semua Kecamatan</option>`;
+  geojsonData.kecamatan.features.forEach((f) => {
+    const opt = document.createElement("option");
+    opt.value = f.properties.kdkec;
+    opt.textContent = f.properties.nmkec;
+    select.appendChild(opt);
+  });
+}
+
+// Populate Desa Dropdown
+function populateDesaDropdown(selectedKec = "") {
+  const select = document.getElementById("filter-desa");
+  select.innerHTML = `<option value="">Semua Desa</option>`;
+  geojsonData.desa.features
+    .filter((f) => !selectedKec || f.properties.kdkec === selectedKec)
+    .forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.properties.kddesa;
+      opt.textContent = f.properties.nmdesa;
+      select.appendChild(opt);
+    });
+}
+
+// Update Desa saat Kecamatan dipilih
+document.getElementById("filter-kec").addEventListener("change", function () {
+  const selectedKec = this.value;
+  populateDesaDropdown(selectedKec);
+});
+
+// Download file
+document.getElementById("download-filtered").addEventListener("click", () => {
+  const selectedKec = document.getElementById("filter-kec").value;
+  const selectedDesa = document.getElementById("filter-desa").value;
+
+  const filtered = taggingData.filter((t) => {
+    if (!t.isNyasar) return false;
+    if (selectedKec && t.kdkec !== selectedKec) return false;
+    if (selectedDesa && t.kddesa !== selectedDesa) return false;
+    return true;
+  });
+
+  // Export to Excel
+  // Buat worksheet manual agar bisa set tipe cell
+  const header = [
+    "kdkec",
+    "nmkec",
+    "kddesa",
+    "nmdesa",
+    "kdsls",
+    "nmsls",
+    "PML",
+    "PPL",
+    "Jarak",
+  ];
+
+  const data = filtered.map((t) => [
+    t.kdkec,
+    getNamaKecamatan(t.kdkec),
+    t.kddesa,
+    getNamaDesa(t.kdkec, t.kddesa),
+    t.kdsls,
+    getNamaSLS(t.kdkec, t.kddesa, t.kdsls),
+    t.PML || "",
+    t.PPL || "",
+    t.jarakKeBatas || "",
+  ]);
+
+  const aoa = [header, ...data];
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Format kolom tertentu sebagai text (agar 00 tetap muncul tanpa tanda kutip)
+  ["A", "C", "E"].forEach((col) => {
+    for (let r = 2; r <= aoa.length; r++) {
+      const cell = worksheet[`${col}${r}`];
+      if (cell) cell.z = "@"; // Format text
+    }
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Tagging Nyasar");
+  XLSX.writeFile(workbook, "tagging-nyasar.xlsx");
+
+  popupExport.classList.remove("show");
+});
+
+// Setelah semua elemen HTML sudah pasti ada
+document.addEventListener("DOMContentLoaded", () => {
+  populatePetugasDatalist(); // Pastikan ini dipanggil saat awal
+  // Event listener pencarian
+  document.getElementById("pml-input").addEventListener("input", () => {
+    const pml = document.getElementById("pml-input").value.trim();
+    const ppl = document.getElementById("ppl-input").value.trim();
+
+    showTaggingFiltered((t) => {
+      return (!pml || t.PML === pml) && (!ppl || t.PPL === ppl);
+    });
+  });
+
+  document.getElementById("ppl-input").addEventListener("input", () => {
+    const pml = document.getElementById("pml-input").value.trim();
+    const ppl = document.getElementById("ppl-input").value.trim();
+
+    showTaggingFiltered((t) => {
+      return (!pml || t.PML === pml) && (!ppl || t.PPL === ppl);
+    });
+  });
+});
+
+const pmlInput = document.getElementById("pml-input");
+const pplInput = document.getElementById("ppl-input");
+const pplList = document.getElementById("ppl-list");
+const pmlList = document.getElementById("pml-list");
+
+// Inisialisasi PML list
+const uniquePMLs = [...new Set(taggingData.map((t) => t.PML))]
+  .filter(Boolean)
+  .sort();
+pmlList.innerHTML = uniquePMLs.map((pml) => `<option value="${pml}">`).join("");
+
+// Saat PML diketik atau dipilih
+pmlInput.addEventListener("input", () => {
+  const selectedPML = pmlInput.value.trim();
+  const filteredPPLs = [
+    ...new Set(
+      taggingData.filter((t) => t.PML === selectedPML).map((t) => t.PPL)
+    ),
+  ]
+    .filter(Boolean)
+    .sort();
+
+  pplList.innerHTML = filteredPPLs
+    .map((ppl) => `<option value="${ppl}">`)
+    .join("");
+
+  // Tampilkan titik tagging sesuai input PML + PPL
+  const selectedPPL = pplInput.value.trim();
+  showTaggingFiltered(
+    (t) =>
+      (!selectedPML || t.PML === selectedPML) &&
+      (!selectedPPL || t.PPL === selectedPPL)
+  );
+});
+
+// Saat PPL diketik
+pplInput.addEventListener("input", () => {
+  const selectedPML = pmlInput.value.trim();
+  const selectedPPL = pplInput.value.trim();
+  showTaggingFiltered(
+    (t) =>
+      (!selectedPML || t.PML === selectedPML) &&
+      (!selectedPPL || t.PPL === selectedPPL)
+  );
+});
+
+function clearPML() {
+  document.getElementById("pml-input").value = "";
+  document.getElementById("ppl-input").value = "";
+
+  const pplList = document.getElementById("ppl-list");
+  if (pplList) {
+    pplList.innerHTML = "";
+  }
+  slsLayer.clearLayers();
+  showKecamatan();
+  clearTagging();
+}
+
+function clearPPL() {
+  document.getElementById("ppl-input").value = "";
+  const pml = document.getElementById("pml-input").value.trim();
+
+  showTaggingFiltered((t) => {
+    return !pml || t.PML === pml;
+  });
+
+  // Tidak perlu panggil clearTagging lagi
+}
+
+function showSLSForPetugas(filteredTagging) {
+  clearMap();
+  if (!geojsonData) return;
+
+  const selectedCodes = new Set(
+    filteredTagging.map((t) => `${t.kdkec}-${t.kddesa}-${t.kdsls}`)
+  );
+
+  const filteredSLS = {
+    type: "FeatureCollection",
+    features: geojsonData.sls.features.filter((f) => {
+      const p = f.properties;
+      const key = `${p.kdkec}-${p.kddesa}-${p.kdsls}`;
+      return selectedCodes.has(key);
+    }),
   };
 
-  legendControl.addTo(map);
-}
+  slsLayer.clearLayers();
 
-// Layer group khusus untuk label SLS
-// Layer group khusus untuk label SLS
-let slsLabelLayer = L.layerGroup().addTo(map);
-
-function updateSLSLabels(field) {
-  if (!slsLayerGroup) return;
-
-  // Bersihkan semua label lama
-  slsLabelLayer.clearLayers();
-
-  slsLayerGroup.eachLayer((layer) => {
-    const kodeKey = layer._kodeKey;
-    const data = muatanByKode[kodeKey];
-    const val = parseFloat(data?.[field]) || 0;
-    const statusLKM = (data?.statusLKM || "").trim().toLowerCase();
-
-    if (statusLKM !== "belum" && !isNaN(val)) {
-      const center = layer.getBounds().getCenter();
-      const label = L.tooltip({
+  // Tambahkan poligon dengan tooltip kode SLS
+  L.geoJSON(filteredSLS, {
+    style: {
+      color: "#e76f51",
+      weight: 2,
+      fillOpacity: 0.1,
+    },
+    onEachFeature: (feature, layer) => {
+      const kodeSLS = feature.properties.kdsls;
+      layer.bindTooltip(kodeSLS, {
         permanent: true,
         direction: "center",
-        className: "sls-label bg-label",
-      })
-        .setContent(val.toFixed(0))
-        .setLatLng(center);
+        className: "sls-label",
+      });
+    },
+  }).addTo(slsLayer);
 
-      slsLabelLayer.addLayer(label);
+  // Tambahkan teks marker di tengah poligon
+  filteredSLS.features.forEach((f) => {
+    const center = getPolygonCenter(f.geometry);
+    if (center) {
+      const kode = f.properties.kdsls;
+      const label = L.marker(center, {
+        icon: L.divIcon({
+          className: "sls-label",
+          html: kode,
+          iconSize: [30, 20],
+        }),
+      });
+      slsLayer.addLayer(label);
     }
   });
 
-  // Panggil pengecekan pertama kali setelah membuat label
-  toggleSLSLabelsByZoom();
-}
+  slsLayer.addTo(map);
 
-// Fungsi untuk hide/show label berdasarkan zoom
-function toggleSLSLabelsByZoom() {
-  if (map.getZoom() < 15) {
-    map.removeLayer(slsLabelLayer);
-  } else {
-    if (!map.hasLayer(slsLabelLayer)) {
-      map.addLayer(slsLabelLayer);
-    }
+  // Zoom ke area gabungan
+  if (filteredSLS.features.length > 0) {
+    const bounds = L.geoJSON(filteredSLS).getBounds();
+    map.fitBounds(bounds, {
+      paddingBottomRight: window.innerWidth > 768 ? [300, 0] : [0, 0],
+    });
   }
 }
 
-// Event listener untuk cek setiap kali zoom berubah
-map.on("zoomend", toggleSLSLabelsByZoom);
-
-
-
-// Mapping untuk label legenda
-const legendLabels = {
-  totalMuatan: "Total Muatan",
-  muatanKK: "Muatan KK",
-  jumlahBTT: "Jumlah BTT",
-  jumlahBTTKosong: "BTT Kosong",
-  jumlahBKU: "BKU",
-  jumlahBBTT: "BBTT Non Usaha",
-  muatanUsaha: "Muatan Usaha",
-};
-
-const inputKoordinat = document.getElementById("inputKoordinat");
-const btnCari = document.getElementById("btnCari");
-let markerCari = null;
-
-function resetCari() {
-  if (markerCari) {
-    map.removeLayer(markerCari);
-    markerCari = null;
+function getPolygonCenter(geometry) {
+  const coords = geometry.coordinates;
+  if (geometry.type === "Polygon") {
+    return L.polygon(coords).getBounds().getCenter();
+  } else if (geometry.type === "MultiPolygon") {
+    return L.polygon(coords[0]).getBounds().getCenter(); // Ambil polygon pertama
   }
-  inputKoordinat.value = "";
-  btnCari.querySelector(".material-icons").textContent = "search";
+  return null;
 }
 
-function cariKoordinat() {
-  const val = inputKoordinat.value.trim();
-  if (!val) return;
+const selectedSLSHighlightLayer = L.geoJSON(null, {
+  style: {
+    color: "gold",
+    weight: 3,
+    fillOpacity: 0.1,
+  },
+}).addTo(map);
 
-  // Parsing format lat,lng
-  const parts = val.split(",");
-  if (parts.length !== 2) {
-    alert("Masukkan koordinat dengan format: lat,lng");
-    return;
-  }
+function countLandmarks(taggingList) {
+  const counts = {};
 
-  const lat = parseFloat(parts[0]);
-  const lng = parseFloat(parts[1]);
+  taggingList.forEach((t) => {
+    const jenis = t.tipe_landmark?.trim() || "Lainnya";
+    counts[jenis] = (counts[jenis] || 0) + 1;
+  });
 
-  if (isNaN(lat) || isNaN(lng)) {
-    alert("Koordinat tidak valid!");
-    return;
-  }
-
-  if (markerCari) {
-    map.removeLayer(markerCari);
-  }
-
-  markerCari = L.marker([lat, lng]).addTo(map);
-  // Tidak mengubah zoom/pusat map sesuai permintaan
-
-  btnCari.querySelector(".material-icons").textContent = "close";
+  return counts;
 }
 
-btnCari.addEventListener("click", () => {
-  const icon = btnCari.querySelector(".material-icons").textContent;
-  if (icon === "search") {
-    cariKoordinat();
-  } else if (icon === "close") {
-    resetCari();
-  }
-});
+function updateLandmarkCountDisplay(counts) {
+  const container = document.getElementById("landmark-info");
+  if (!container) return;
 
-inputKoordinat.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    const icon = btnCari.querySelector(".material-icons").textContent;
-    if (icon === "search") {
-      cariKoordinat();
-    } else if (icon === "close") {
-      resetCari();
-    }
-  }
-});
+  const batasWilkerstatList = ["Batas SLS", "Batas Segmen"];
 
-// Variabel global untuk menyimpan nama wilayah
-function updateNavbar(level, kdkec = "", kddesa = "") {
-  let html = "";
-
-  if (level === "kab") {
-    html = `<span>KAB BOYOLALI</span>`;
-  }
-
-  if (level === "kec") {
-    const kec = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
-    const namaKec = kec ? kec.properties.nmkec : kdkec;
-
-    html = `
-      <a href="javascript:void(0)" onclick="renderLevelAwal()">KAB BOYOLALI</a>
-      <span class="separator">></span>
-      <span>${namaKec}</span>
-    `;
-  }
-
-  if (level === "desa") {
-    const kec = geojsonData.kecamatan.features.find(f => f.properties.kdkec === kdkec);
-    const namaKec = kec ? kec.properties.nmkec : kdkec;
-
-    const desa = geojsonData.desa.features.find(f => 
-      f.properties.kdkec === kdkec && f.properties.kddesa === kddesa
-    );
-    const namaDesa = desa ? desa.properties.nmdesa : kddesa;
-
-    html = `
-      <a href="javascript:void(0)" onclick="renderLevelAwal()">KAB BOYOLALI</a>
-      <span class="separator">></span>
-      <a href="javascript:void(0)" onclick="zoomKeKecamatan('${kdkec}')">${namaKec}</a>
-      <span class="separator">></span>
-      <span>${namaDesa}</span>
-    `;
-  }
-
-  document.getElementById("breadcrumb").innerHTML = html;
-}
-
-// init klik/keyboard untuk kolom warna bar
-document.querySelectorAll("#kolomWarnaBar .warna-item").forEach(item => {
-  const activate = () => {
-    // hapus active
-    document.querySelectorAll("#kolomWarnaBar .warna-item").forEach(i => i.classList.remove("active"));
-    // set active
-    item.classList.add("active");
-    // ambil field dan panggil update warna
-    const field = item.dataset.value || "totalMuatan";
-    updateWarnaSLSBerdasarkanMuatan(field);
+  const buildList = (list) => {
+    return list
+      .map((jenis) => {
+        if (!counts[jenis]) return "";
+        const icon = ikonLandmark[jenis]?.icon || "❓";
+        const color = ikonLandmark[jenis]?.color || "#999";
+        const jumlah = counts[jenis];
+        return `<li><span class="landmark-icon" style="color:${color}">${icon}</span> ${jenis}: ${jumlah}</li>`;
+      })
+      .join("");
   };
 
-  item.addEventListener("click", activate);
+  // Buat bagian Batas Wilkerstat
+  let batasHTML = buildList(batasWilkerstatList);
+  batasHTML = batasHTML
+    ? `
+    <div class="landmark-group">
+      <div class="landmark-category">Batas Wilkerstat</div>
+      <ul>${batasHTML}</ul>
+    </div>`
+    : "";
 
-  // keyboard accessibility (Enter / Space)
-  item.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      activate();
-    }
-  });
-});
+  // Buat bagian Wilayah Konsentrasi Ekonomi (sisanya)
+  const ekonomiList = Object.keys(counts).filter(
+    (jenis) => !batasWilkerstatList.includes(jenis)
+  );
+  let ekonomiHTML = buildList(ekonomiList);
+  ekonomiHTML = ekonomiHTML
+    ? `
+    <div class="landmark-group">
+      <div class="landmark-category">Wilayah Konsentrasi Ekonomi</div>
+      <ul>${ekonomiHTML}</ul>
+    </div>`
+    : "";
 
+  container.innerHTML = `<h4>Jumlah Landmark</h4>${batasHTML}${ekonomiHTML}`;
+}
