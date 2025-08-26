@@ -149,7 +149,7 @@ async function fetchGeoJSONWithCache(key, url) {
 let taggingCache = []; // definisi global di awal, di luar semua fungsi
 
 const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pub?gid=0&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRW8AQ8pnphA7YgQsORfiKTby634f9trawHVLG5AspGbkY4G5A6vMfqwkiUQEztS8gYs1GuMJF_w766/pubhtml?gid=0&single=true";
 
 Papa.parse(CSV_URL, {
   download: true,
